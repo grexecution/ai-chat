@@ -21,7 +21,9 @@ export default function UserManagement() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
@@ -59,6 +61,8 @@ export default function UserManagement() {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setSuccess('')
+    setSubmitting(true)
     
     try {
       const res = await fetch('/api/admin/users', {
@@ -76,13 +80,21 @@ export default function UserManagement() {
       setUsers([data, ...users])
       setShowAddForm(false)
       setNewUser({ email: '', password: '', name: '', role: 'user' })
+      setSuccess(`User ${data.email} created successfully!`)
+      setTimeout(() => setSuccess(''), 5000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create user')
+      setTimeout(() => setError(''), 5000)
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleDeleteUser = async (userId: string, userEmail: string) => {
     if (!confirm(`Are you sure you want to delete ${userEmail}?`)) return
+    
+    setError('')
+    setSuccess('')
     
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -92,14 +104,20 @@ export default function UserManagement() {
       if (!res.ok) throw new Error('Failed to delete user')
       
       setUsers(users.filter(u => u.id !== userId))
+      setSuccess(`User ${userEmail} deleted successfully!`)
+      setTimeout(() => setSuccess(''), 5000)
     } catch (err) {
       setError('Failed to delete user')
+      setTimeout(() => setError(''), 5000)
       console.error(err)
     }
   }
 
   const handleToggleRole = async (userId: string, currentRole: string) => {
     const newRole = currentRole === 'superuser' ? 'user' : 'superuser'
+    
+    setError('')
+    setSuccess('')
     
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
@@ -112,8 +130,11 @@ export default function UserManagement() {
       
       const updatedUser = await res.json()
       setUsers(users.map(u => u.id === userId ? { ...u, role: updatedUser.role } : u))
+      setSuccess(`Role updated to ${newRole} successfully!`)
+      setTimeout(() => setSuccess(''), 5000)
     } catch (err) {
       setError('Failed to update role')
+      setTimeout(() => setError(''), 5000)
       console.error(err)
     }
   }
@@ -140,8 +161,24 @@ export default function UserManagement() {
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-900/20 border border-red-600/30 rounded-lg text-red-400">
-            {error}
+          <div className="mb-4 p-4 bg-red-900/20 border border-red-600/30 rounded-lg text-red-400 animate-in">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {error}
+            </div>
+          </div>
+        )}
+        
+        {success && (
+          <div className="mb-4 p-4 bg-emerald-900/20 border border-emerald-600/30 rounded-lg text-emerald-400 animate-in">
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {success}
+            </div>
           </div>
         )}
 
@@ -183,9 +220,20 @@ export default function UserManagement() {
             </div>
             <button
               type="submit"
-              className="mt-4 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+              disabled={submitting}
+              className="mt-4 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
             >
-              Create User
+              {submitting ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Creating...
+                </>
+              ) : (
+                'Create User'
+              )}
             </button>
           </form>
         )}

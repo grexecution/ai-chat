@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma db seed:*)",
+      "Bash(openssl rand:*)",
+      "Bash(sqlite3:*)",
+      "Bash(npx depcheck:*)",
+      "Bash(npm run lint)",
+      "Bash(mkdir:*)",
+      "Bash(docker exec:*)",
+      "Bash(ollama list:*)",
+      "WebSearch",
+      "Bash(ollama rm:*)",
+      "Bash(ollama pull:*)",
+      "Bash(time ollama run:*)",
+      "Bash(npx prisma migrate:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker-compose:*)",
+      "Bash(pg_isready:*)",
+      "Bash(brew services:*)",
+      "Bash(psql:*)",
+      "Bash(/opt/homebrew/opt/postgresql@15/bin/psql -U gregorwallner -h localhost -l)",
+      "Bash(/opt/homebrew/opt/postgresql@15/bin/createdb -U gregorwallner -h localhost ai_chat)",
+      "Bash(rm:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
