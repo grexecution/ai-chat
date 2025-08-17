@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { searchWeb, type Citation } from '@/lib/web-search'
+import { detectSearchIntent } from '@/lib/tool-detection'
 
 interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -18,18 +19,6 @@ interface ChatCompletionRequest {
 }
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434'
-
-// Keywords that might indicate a need for web search
-const SEARCH_TRIGGERS = [
-  'latest', 'recent', 'current', 'today', 'news', 'update',
-  'what is happening', 'search', 'find', 'look up', 'google',
-  '2024', '2025', 'this year', 'this month', 'this week'
-]
-
-function shouldSearchWeb(message: string): boolean {
-  const lowerMessage = message.toLowerCase()
-  return SEARCH_TRIGGERS.some(trigger => lowerMessage.includes(trigger))
-}
 
 /**
  * OpenAI-compatible chat completions endpoint with Ollama backend and web search
@@ -94,33 +83,46 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Check if web search is needed
+    // Check if web search is needed using smart intent detection
     let searchResults: Citation[] = []
     let searchContext = ''
     let isSearching = false
     
-    if (enableWebSearch && lastUserMessage.role === 'user' && shouldSearchWeb(lastUserMessage.content)) {
-      isSearching = true
+    if (enableWebSearch && lastUserMessage.role === 'user') {
+      // Use AI-based intent detection instead of keyword matching
+      const searchIntent = await detectSearchIntent(
+        lastUserMessage.content,
+        messages.slice(-5).map(m => ({ role: m.role, content: m.content })) // Last 5 messages for context
+      )
       
-      // Perform web search
-      const results = await searchWeb(lastUserMessage.content, 5)
-      
-      if (results.length > 0) {
-        // Convert to citations format
-        searchResults = results.map((result, index) => ({
-          id: `cite-${index + 1}`,
-          title: result.title,
-          url: result.url,
-          snippet: result.snippet,
-          usedInResponse: true
-        }))
+      if (searchIntent.shouldSearch && searchIntent.confidence >= 0.5) {
+        isSearching = true
+        console.log(`[Search Intent] Detected with ${searchIntent.confidence} confidence. Query: "${searchIntent.searchQuery}"`)
         
-        // Create search context for the AI
-        searchContext = `\n\nWeb Search Results for "${lastUserMessage.content}":\n` +
-          searchResults.map((cite, idx) => 
-            `[${idx + 1}] ${cite.title}\nURL: ${cite.url}\nSnippet: ${cite.snippet}\n`
-          ).join('\n') +
-          '\nPlease use these search results to provide an accurate and up-to-date response. Cite sources using [1], [2], etc. when referencing information from the search results.'
+        // Perform web search with the optimized query
+        const results = await searchWeb(searchIntent.searchQuery || lastUserMessage.content, 5)
+      
+        if (results.length > 0) {
+          // Convert to citations format
+          searchResults = results.map((result, index) => ({
+            id: `cite-${index + 1}`,
+            title: result.title,
+            url: result.url,
+            snippet: result.snippet,
+            usedInResponse: true
+          }))
+          
+          // Create search context for the AI
+          searchContext = `\n\nWeb Search Results for "${searchIntent.searchQuery || lastUserMessage.content}":\n` +
+            searchResults.map((cite, idx) => 
+              `[${idx + 1}] ${cite.title}\nURL: ${cite.url}\nSnippet: ${cite.snippet}\n`
+            ).join('\n') +
+            '\nPlease use these search results to provide an accurate and up-to-date response. Cite sources using [1], [2], etc. when referencing information from the search results.'
+        } else {
+          // Search attempted but no results found
+          isSearching = false
+          console.log('[Search] No results found, continuing without web data')
+        }
       }
     }
 
@@ -182,15 +184,31 @@ export async function POST(req: NextRequest) {
      */
     const stream = new ReadableStream({
       async start(controller) {
-        const reader = ollamaResponse.body?.getReader()
-        if (!reader) {
-          controller.close()
-          return
-        }
-
         const encoder = new TextEncoder()
         const decoder = new TextDecoder()
-        let buffer = ''
+        
+        try {
+          const reader = ollamaResponse.body?.getReader()
+          if (!reader) {
+            // Send error message if no reader available
+            const errorChunk = {
+              id: `chatcmpl-${Date.now()}`,
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: model || 'llama3.2:3b',
+              choices: [{
+                index: 0,
+                delta: { content: 'Sorry, I encountered an error processing your request.' },
+                finish_reason: 'stop'
+              }]
+            }
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorChunk)}\n\n`))
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+            controller.close()
+            return
+          }
+
+          let buffer = ''
 
         // Send metadata in first chunk
         if (!conversationId && currentConversationId) {
@@ -226,28 +244,33 @@ export async function POST(req: NextRequest) {
             if (done) {
               // Persist complete assistant response to database with citations
               if (assistantContent.trim()) {
-                const messageData: any = {
-                  conversationId: currentConversationId as string,
-                  role: 'assistant',
-                  content: assistantContent.trim(),
-                }
-                
-                // Add citations as metadata if available
-                if (searchResults.length > 0) {
-                  messageData.metadata = {
-                    citations: searchResults
+                try {
+                  const messageData: any = {
+                    conversationId: currentConversationId as string,
+                    role: 'assistant',
+                    content: assistantContent.trim(),
                   }
-                }
-                
-                await prisma.message.create({
-                  data: messageData,
-                })
+                  
+                  // Add citations as metadata if available
+                  if (searchResults.length > 0) {
+                    messageData.metadata = {
+                      citations: searchResults
+                    }
+                  }
+                  
+                  await prisma.message.create({
+                    data: messageData,
+                  })
 
-                // Update conversation timestamp
-                await prisma.conversation.update({
-                  where: { id: currentConversationId as string },
-                  data: { updatedAt: new Date() },
-                })
+                  // Update conversation timestamp
+                  await prisma.conversation.update({
+                    where: { id: currentConversationId as string },
+                    data: { updatedAt: new Date() },
+                  })
+                } catch (dbError) {
+                  console.error('Failed to persist message to database:', dbError)
+                  // Continue anyway - don't crash the stream
+                }
               }
 
               // Send final completion message
@@ -309,10 +332,31 @@ export async function POST(req: NextRequest) {
           }
         } catch (error) {
           console.error('Stream processing error:', error)
-          controller.error(error)
+          // Send an error message to the client before closing
+          try {
+            const errorMessage = {
+              id: `chatcmpl-${Date.now()}`,
+              object: 'chat.completion.chunk',
+              created: Math.floor(Date.now() / 1000),
+              model: model || 'llama3.2:3b',
+              choices: [{
+                index: 0,
+                delta: { content: '\n\n[Error: Failed to complete response. Please try again.]' },
+                finish_reason: 'stop'
+              }]
+            }
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(errorMessage)}\n\n`))
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+          } catch (e) {
+            // If we can't even send the error, just close
+          }
           controller.close()
         }
+      } catch (error) {
+        console.error('Fatal stream error:', error)
+        controller.close()
       }
+    }
     })
 
     return new Response(stream, {

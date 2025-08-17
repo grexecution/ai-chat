@@ -13,6 +13,7 @@ export interface Message {
   conversationId?: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  metadata?: any // JSON field for citations and other structured data
   createdAt: string | Date
 }
 
