@@ -109,7 +109,6 @@ kubectl wait --for=condition=ready pod -l app=ollama -n ollama --timeout=180s
 
 # Step 4: Download AI models
 echo -e "${YELLOW}Step 4: Downloading AI models (this will take 5-10 minutes)...${NC}"
-kubectl exec -it -n ollama deployment/ollama -- ollama pull gemma2:2b
 kubectl exec -it -n ollama deployment/ollama -- ollama pull llama3.2:3b
 
 # Step 5: Setup Nginx with authentication
@@ -186,7 +185,6 @@ To check if everything is working:
 curl -u ollama:${API_PASSWORD} http://${SERVER_IP}:11434/api/tags
 
 Available models:
-- gemma2:2b (Fast)
 - llama3.2:3b (Balanced)
 
 =========================================

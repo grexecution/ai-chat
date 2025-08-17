@@ -10,7 +10,6 @@ interface ChatComposerProps {
 }
 
 const AVAILABLE_MODELS = [
-  { id: 'gemma2:2b', name: 'Gemma 2 (Fast)', description: '⚡ Ultra-fast responses, good for simple tasks' },
   { id: 'llama3.2:3b', name: 'LLaMA 3.2 (Balanced)', description: '⚖️ Best accuracy vs speed, 128K context' },
 ]
 

@@ -54,7 +54,6 @@ systemctl start ollama
 
 # Pull AI models
 echo -e "${YELLOW}Downloading AI models (this will take 5-10 minutes)...${NC}"
-ollama pull gemma2:2b
 ollama pull llama3.2:3b
 
 # Clone repository
@@ -79,7 +78,7 @@ NEXTAUTH_SECRET=$NEXTAUTH_SECRET
 
 # Ollama (local)
 OLLAMA_URL=http://localhost:11434
-DEFAULT_MODEL=gemma2:2b
+DEFAULT_MODEL=llama3.2:3b
 
 # Environment
 NODE_ENV=production
@@ -167,7 +166,6 @@ Database:
 NextAuth Secret: $NEXTAUTH_SECRET
 
 Available AI Models:
-- gemma2:2b (Fast)
 - llama3.2:3b (Balanced)
 
 Useful commands:

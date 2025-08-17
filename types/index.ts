@@ -61,7 +61,6 @@ export interface Model {
 export const AVAILABLE_MODELS: Model[] = [
   { id: 'llama3.2:latest', name: 'LLaMA 3.2', description: 'Latest model, fast and accurate' },
   { id: 'llama3.1:8b', name: 'LLaMA 3.1 8B', description: 'Powerful 8B parameter model' },
-  { id: 'gemma2:2b', name: 'Gemma 2 2B', description: 'Google Gemma 2B model' },
   { id: 'tinyllama:latest', name: 'TinyLLaMA', description: 'Lightweight and fast' },
 ]
 

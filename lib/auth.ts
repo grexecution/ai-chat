@@ -36,7 +36,14 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email }
+          where: { email: credentials.email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            passwordHash: true,
+            role: true
+          }
         })
 
         if (!user) {
@@ -55,7 +62,8 @@ export const authOptions: NextAuthOptions = {
         return {
           id: user.id,
           email: user.email,
-          name: user.name || undefined // Convert null to undefined for NextAuth compatibility
+          name: user.name || undefined, // Convert null to undefined for NextAuth compatibility
+          role: user.role
         }
       }
     })
@@ -89,6 +97,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id
         token.email = user.email
         token.name = user.name
+        token.role = (user as any).role || 'user'
       }
       
       // Handle session updates (when update() is called)
@@ -96,11 +105,18 @@ export const authOptions: NextAuthOptions = {
         // Fetch the latest user data from database
         const latestUser = await prisma.user.findUnique({
           where: { id: token.id as string },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true
+          }
         })
         
         if (latestUser) {
           token.name = latestUser.name
           token.email = latestUser.email
+          token.role = latestUser.role
         }
       }
       
@@ -117,6 +133,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string
         session.user.email = token.email as string
         session.user.name = token.name as string
+        ;(session.user as any).role = token.role || 'user'
       }
       return session
     }
