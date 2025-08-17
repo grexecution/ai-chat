@@ -19,6 +19,8 @@ export default function ChatPage() {
     messages,
     isLoading,
     streamingMessage,
+    isSearching,
+    currentCitations,
     sendMessage,
     loadMessages,
     clearMessages,
@@ -136,6 +138,8 @@ export default function ChatPage() {
               messages={messages}
               streamingMessage={streamingMessage}
               isLoading={isLoading}
+              isSearching={isSearching}
+              currentCitations={currentCitations}
             />
           </div>
           

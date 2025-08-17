@@ -5,7 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="c88f18df-dde9-43b6-9a26-35bdc7d9e278" name="Changes" comment="Add User Management, Remove Gemma">
-      <change beforePath="$PROJECT_DIR$/app/admin/users/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/app/admin/users/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/api/v1/chat/completions/route.ts" beforeDir="false" afterPath="$PROJECT_DIR$/app/api/v1/chat/completions/route.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/ChatComposer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/ChatComposer.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/components/ChatThread.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/components/ChatThread.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -67,7 +73,7 @@
       <updated>1754779522447</updated>
       <workItem from="1754779523711" duration="17840000" />
       <workItem from="1755111804145" duration="36765000" />
-      <workItem from="1755431438982" duration="2594000" />
+      <workItem from="1755431438982" duration="3623000" />
     </task>
     <task id="LOCAL-00001" summary="Add production deployment configuration&quot;">
       <option name="closed" value="true" />

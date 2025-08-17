@@ -53,7 +53,7 @@ function ChatComposer({
   return (
     <div className="border-t border-zinc-800/50 bg-zinc-950">
       <div className="p-4">
-        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
+        <form onSubmit={handleSubmit} className="mx-auto">
           {/* Message Input */}
           <div className="relative mb-2">
             <div className="glassmorphism rounded-2xl border border-zinc-800/50 focus-within:border-emerald-600/50 transition-colors">

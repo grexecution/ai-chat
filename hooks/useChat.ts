@@ -1,12 +1,16 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { type Citation } from '@/lib/web-search'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   createdAt: string
+  metadata?: {
+    citations?: Citation[]
+  }
 }
 
 interface UseChatOptions {
@@ -15,16 +19,18 @@ interface UseChatOptions {
 }
 
 /**
- * Custom hook for managing chat conversations with streaming support
+ * Custom hook for managing chat conversations with streaming support and web search
  * 
  * @param options - Configuration options for the chat
  * @param options.conversationId - Existing conversation ID to continue
  * @param options.onNewConversation - Callback when a new conversation is created
  * 
  * @returns Chat state and control functions
- * @returns messages - Array of chat messages
+ * @returns messages - Array of chat messages with potential citations
  * @returns isLoading - Loading state indicator
  * @returns streamingMessage - Current streaming assistant response
+ * @returns isSearching - Whether web search is in progress
+ * @returns currentCitations - Citations for the current streaming message
  * @returns sendMessage - Function to send a new message
  * @returns loadMessages - Function to load messages for a conversation
  * @returns clearMessages - Function to clear all messages
@@ -33,6 +39,8 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [streamingMessage, setStreamingMessage] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [currentCitations, setCurrentCitations] = useState<Citation[]>([])
 
   /**
    * Loads messages for a specific conversation from the API
@@ -51,7 +59,7 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
   }, [])
 
   /**
-   * Sends a message to the chat API and handles streaming response
+   * Sends a message to the chat API and handles streaming response with web search
    * 
    * @param content - The message content to send
    * @param model - The AI model to use for generation
@@ -60,9 +68,10 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
    * This function:
    * 1. Creates a user message and adds it to the UI
    * 2. Sends the message to the API with conversation context
-   * 3. Handles SSE streaming for real-time response updates
-   * 4. Manages conversation creation for new chats
-   * 5. Updates UI with streaming content and final message
+   * 3. Handles web search if needed based on query content
+   * 4. Handles SSE streaming for real-time response updates
+   * 5. Manages conversation creation for new chats
+   * 6. Updates UI with streaming content, citations, and final message
    */
   const sendMessage = useCallback(async (content: string, model: string) => {
     if (!content.trim()) return
@@ -77,6 +86,8 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
     setStreamingMessage('')
+    setIsSearching(false)
+    setCurrentCitations([])
 
     try {
       const payload = {
@@ -86,6 +97,7 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
         })),
         model,
         conversationId,
+        enableWebSearch: true // Enable web search by default
       }
 
       const res = await fetch('/api/v1/chat/completions', {
@@ -103,6 +115,7 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
 
       let assistantContent = ''
       let newConversationId = conversationId
+      let messageCitations: Citation[] = []
 
       // Process SSE stream chunk by chunk
       while (true) {
@@ -123,6 +136,21 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
 
             try {
               const parsed = JSON.parse(data)
+              
+              // Handle search status
+              if (parsed.isSearching !== undefined) {
+                setIsSearching(parsed.isSearching)
+                if (parsed.searchMessage) {
+                  // Optionally show search message in UI
+                  console.log('Search status:', parsed.searchMessage)
+                }
+              }
+              
+              // Handle citations
+              if (parsed.citations) {
+                messageCitations = parsed.citations
+                setCurrentCitations(parsed.citations)
+              }
               
               // Handle new conversation ID
               if (parsed.conversationId && !conversationId) {
@@ -154,12 +182,15 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
       // Clear streaming message first, then add final assistant message
       if (assistantContent) {
         setStreamingMessage('') // Clear streaming message first
+        setIsSearching(false) // Clear search status
+        setCurrentCitations([]) // Clear current citations
         
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
           content: assistantContent,
           createdAt: new Date().toISOString(),
+          metadata: messageCitations.length > 0 ? { citations: messageCitations } : undefined
         }
 
         setMessages(prev => [...prev, assistantMessage])
@@ -180,6 +211,8 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
     } finally {
       setIsLoading(false)
       setStreamingMessage('')
+      setIsSearching(false)
+      setCurrentCitations([])
     }
   }, [messages, conversationId, onNewConversation])
 
@@ -189,12 +222,16 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
   const clearMessages = useCallback(() => {
     setMessages([])
     setStreamingMessage('')
+    setIsSearching(false)
+    setCurrentCitations([])
   }, [])
 
   return {
     messages,
     isLoading,
     streamingMessage,
+    isSearching,
+    currentCitations,
     sendMessage,
     loadMessages,
     clearMessages,
