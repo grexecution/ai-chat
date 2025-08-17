@@ -1,0 +1,45 @@
+{
+  "name": "gibby-chat-next",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:seed": "tsx prisma/seed.ts",
+    "postinstall": "prisma generate",
+    "deploy": "prisma migrate deploy && npm run build"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@next-auth/prisma-adapter": "^1.0.7",
+    "@prisma/client": "^6.14.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^24.2.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "autoprefixer": "^10.4.21",
+    "bcryptjs": "^3.0.2",
+    "eslint": "^9.33.0",
+    "eslint-config-next": "^15.4.6",
+    "next": "^15.4.6",
+    "next-auth": "^4.24.11",
+    "postcss": "^8.5.6",
+    "prisma": "^6.14.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "sqlite3": "^5.1.7",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.4"
+  }
+}

@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+  }
+
+  html, body {
+    @apply h-full overflow-hidden;
+  }
+
+  * {
+    @apply border-zinc-800;
+  }
+
+  body {
+    @apply bg-zinc-950 text-zinc-50 antialiased;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .animate-in {
+    animation: animateIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes animateIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 30px rgba(16, 185, 129, 0.8);
+    }
+  }
+
+  .glow-emerald {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .glassmorphism {
+    @apply backdrop-blur-xl bg-zinc-900/50 border border-zinc-800/50;
+  }
+
+  .security-gradient {
+    @apply bg-gradient-to-r from-emerald-600 to-green-600;
+  }
+}
