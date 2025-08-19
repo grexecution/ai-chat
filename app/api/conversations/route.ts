@@ -20,6 +20,11 @@ export async function GET() {
         model: true,
         folderId: true,
         updatedAt: true,
+        _count: {
+          select: {
+            messages: true
+          }
+        }
       },
     })
 
@@ -70,6 +75,11 @@ export async function POST(req: NextRequest) {
         model: true,
         folderId: true,
         updatedAt: true,
+        _count: {
+          select: {
+            messages: true
+          }
+        }
       },
     })
 

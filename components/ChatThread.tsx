@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, memo } from 'react'
+import { useState, useCallback, memo, useEffect, useRef } from 'react'
 import { Citation } from '@/lib/web-search'
 
 interface Message {
@@ -10,6 +10,11 @@ interface Message {
   createdAt: string
   metadata?: {
     citations?: Citation[]
+    files?: Array<{
+      filename: string
+      type: string
+      size: number
+    }>
   }
 }
 
@@ -19,11 +24,118 @@ interface ChatThreadProps {
   streamingMessage?: string
   isSearching?: boolean
   currentCitations?: Citation[]
+  conversationId?: string
 }
 
-function ChatThread({ messages, isLoading, streamingMessage, isSearching, currentCitations }: ChatThreadProps) {
+function ChatThread({ messages, isLoading, streamingMessage, isSearching, currentCitations, conversationId }: ChatThreadProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [expandedCitations, setExpandedCitations] = useState<Set<string>>(new Set())
+  const [selectedFile, setSelectedFile] = useState<{ messageId: string; filename: string } | null>(null)
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0)
+  const [showScrollButton, setShowScrollButton] = useState(false)
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const lastMessageRef = useRef<HTMLDivElement>(null)
+  const previousMessageCountRef = useRef(messages.length)
+  const previousConversationIdRef = useRef(conversationId)
+  
+  // Cycle through loading messages
+  useEffect(() => {
+    if (isLoading && !streamingMessage && !isSearching) {
+      const loadingMessages = [
+        'Denke nach...',
+        'Analysiere Anfrage...',
+        'Bereite Antwort vor...',
+        'Verarbeite Informationen...'
+      ]
+      
+      const interval = setInterval(() => {
+        setLoadingMessageIndex(prev => (prev + 1) % loadingMessages.length)
+      }, 2000)
+      
+      return () => clearInterval(interval)
+    }
+  }, [isLoading, streamingMessage, isSearching])
+
+  // Track scroll position and unread messages
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+      const isNearBottom = distanceFromBottom < 100
+      
+      // Show button when scrolled up more than 100px from bottom
+      setShowScrollButton(!isNearBottom)
+      
+      // Clear unread if scrolled to bottom
+      if (isNearBottom) {
+        setHasUnreadMessages(false)
+      }
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    // Initial check after a brief delay to ensure DOM is ready
+    setTimeout(handleScroll, 100)
+    
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [messages.length]) // Re-check when messages change
+
+  // Detect new messages and mark as unread if not at bottom
+  useEffect(() => {
+    // Check if conversation changed
+    const conversationChanged = conversationId !== previousConversationIdRef.current
+    
+    if (conversationChanged && messages.length > 0) {
+      // New conversation loaded, always scroll to bottom
+      setTimeout(() => {
+        lastMessageRef.current?.scrollIntoView({ behavior: 'auto' })
+        setHasUnreadMessages(false)
+      }, 100)
+    } else if (messages.length > previousMessageCountRef.current) {
+      // New message in existing conversation
+      const container = scrollContainerRef.current
+      if (container) {
+        const { scrollTop, scrollHeight, clientHeight } = container
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+        
+        if (!isNearBottom) {
+          // User is not at bottom, mark as unread
+          setHasUnreadMessages(true)
+        } else {
+          // Auto-scroll to new message if at bottom
+          setTimeout(() => {
+            lastMessageRef.current?.scrollIntoView({ behavior: 'smooth' })
+          }, 100)
+        }
+      }
+    }
+    
+    previousMessageCountRef.current = messages.length
+    previousConversationIdRef.current = conversationId
+  }, [messages.length, conversationId])
+
+  // Auto-scroll when streaming starts
+  useEffect(() => {
+    if (streamingMessage && !hasUnreadMessages) {
+      const container = scrollContainerRef.current
+      if (container) {
+        const { scrollTop, scrollHeight, clientHeight } = container
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 200
+        
+        if (isNearBottom) {
+          lastMessageRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+      }
+    }
+  }, [streamingMessage, hasUnreadMessages])
+
+  const scrollToBottom = useCallback(() => {
+    lastMessageRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setHasUnreadMessages(false)
+  }, [])
 
   const copyToClipboard = useCallback(async (text: string, messageId: string) => {
     try {
@@ -52,6 +164,75 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
     return content.replace(/\[(\d+)\]/g, (match, num) => {
       return `<sup class="text-emerald-400 cursor-help">[${num}]</sup>`
     })
+  }
+
+  const handleFileClick = useCallback((messageId: string, filename: string) => {
+    // For now, just show an alert with file info
+    // In a full implementation, this could open a modal with file preview
+    alert(`File: ${filename}\n\nPreview functionality can be enhanced to show file contents in a modal or download the file.`)
+  }, [])
+
+  const renderFileAttachments = (files: Array<{ filename: string; type: string; size: number }> | undefined, messageId: string) => {
+    if (!files || files.length === 0) return null
+
+    const getFileIcon = (type: string) => {
+      if (type.includes('pdf') || type.includes('PDF')) {
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18.5,9H13V3.5L18.5,9M6,20V4H11V10H18V20H6Z"/>
+          </svg>
+        )
+      } else if (type.includes('Word') || type.includes('word')) {
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M6,2H14L20,8V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V4A2,2 0 0,1 6,2M13,9V3.5L18.5,9H13M15.2,20L13.5,15.3L11.8,20H10L12.8,12H14.1L17,20H15.2Z"/>
+          </svg>
+        )
+      } else if (type.includes('Excel') || type.includes('Spreadsheet')) {
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M6,2H14L20,8V20A2,2 0 0,1 18,22H6A2,2 0 0,1 4,20V4A2,2 0 0,1 6,2M13,3.5V9H18.5L13,3.5M17,11H13V13H14L12,14.67L10,13H11V11H7V13H8L11,15.5L8,18H7V20H11V18H10L12,16.33L14,18H13V20H17V18H16L13,15.5L16,13H17V11Z"/>
+          </svg>
+        )
+      } else {
+        return (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        )
+      }
+    }
+
+    const formatFileSize = (bytes: number) => {
+      if (bytes < 1024) return bytes + ' B'
+      if (bytes < 1048576) return Math.round(bytes / 1024) + ' KB'
+      return (bytes / 1048576).toFixed(1) + ' MB'
+    }
+
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {files.map((file, index) => (
+          <div
+            key={index}
+            onClick={() => handleFileClick(messageId, file.filename)}
+            className="flex items-center gap-2 px-3 py-2 bg-zinc-900/50 rounded-lg border border-zinc-800 hover:border-emerald-600/30 transition-colors group cursor-pointer"
+            title={`${file.filename} (${formatFileSize(file.size)})`}
+          >
+            <div className="text-zinc-400 group-hover:text-emerald-400 transition-colors">
+              {getFileIcon(file.type)}
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100 max-w-[150px] truncate">
+                {file.filename}
+              </span>
+              <span className="text-xs text-zinc-600">
+                {file.type.split(' ')[0]} • {formatFileSize(file.size)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   const renderCitations = (citations: Citation[] | undefined, messageId: string) => {
@@ -114,7 +295,7 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {messages.length === 0 && !isLoading && (
         <div className="flex-1 flex items-center justify-center text-center p-6">
           <div className="max-w-md">
@@ -132,7 +313,7 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
       )}
       
       {(messages.length > 0 || isLoading || streamingMessage) && (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Render messages */}
           {messages.map((message) => (
             <div key={message.id} className="animate-in">
@@ -148,10 +329,21 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
                       dangerouslySetInnerHTML={{ 
                         __html: message.role === 'assistant' 
                           ? renderMessageWithCitations(message.content)
-                          : message.content 
+                          : (() => {
+                              // For user messages with files, strip the file content
+                              const content = message.content
+                              const fileStartIndex = content.indexOf('\n\n=== ATTACHED FILES ===')
+                              if (fileStartIndex !== -1) {
+                                return content.substring(0, fileStartIndex).trim()
+                              }
+                              return content
+                            })()
                       }}
                     />
                   </div>
+                  
+                  {/* Render file attachments for user messages */}
+                  {message.role === 'user' && renderFileAttachments(message.metadata?.files, message.id)}
                   
                   {/* Render citations for assistant messages */}
                   {message.role === 'assistant' && renderCitations(message.metadata?.citations, message.id)}
@@ -201,18 +393,31 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
             </div>
           )}
 
+          {/* Loading state - shows immediately when message is sent */}
+          {isLoading && !streamingMessage && !isSearching && (
+            <div className="animate-in">
+              <div className="flex flex-col items-start">
+                <div className="max-w-3xl rounded-2xl p-4 glassmorphism text-zinc-100">
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-1">
+                      <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                    <span className="text-sm text-zinc-300 transition-opacity duration-500">
+                      {['Denke nach...', 'Analysiere Anfrage...', 'Bereite Antwort vor...', 'Verarbeite Informationen...'][loadingMessageIndex]}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Streaming message */}
           {streamingMessage && (
             <div className="animate-in">
               <div className={`flex flex-col items-start`}>
                 <div className="max-w-3xl rounded-2xl p-4 glassmorphism text-zinc-100">
-                  {!isSearching && (
-                    <div className="flex gap-1 mb-2">
-                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                    </div>
-                  )}
                   <div className="prose prose-invert prose-sm max-w-none">
                     <pre 
                       className="whitespace-pre-wrap font-sans text-sm leading-relaxed"
@@ -230,6 +435,36 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
               </div>
             </div>
           )}
+          
+          {/* Invisible div for scroll reference */}
+          <div ref={lastMessageRef} className="h-1" />
+        </div>
+      )}
+      
+      {/* Scroll to bottom button */}
+      {showScrollButton && (messages.length > 0 || streamingMessage) && (
+        <div className="absolute bottom-6 right-6 z-20">
+          <button
+            onClick={scrollToBottom}
+            className="group relative bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-full p-3 shadow-lg transition-all hover:scale-110"
+            title="Nach unten scrollen"
+          >
+            {/* Unread notification badge */}
+            {hasUnreadMessages && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
+            )}
+            
+            <svg className="w-5 h-5 text-zinc-300 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+            
+            {/* Tooltip */}
+            {hasUnreadMessages && (
+              <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-zinc-900 text-xs text-zinc-300 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                Neue Nachrichten
+              </div>
+            )}
+          </button>
         </div>
       )}
     </div>

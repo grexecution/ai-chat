@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body: ChatCompletionRequest = await req.json()
-    const { messages, model, conversationId } = body
+    const { messages, model, conversationId, includeFiles, fileMetadata } = body as any
 
     if (!messages || messages.length === 0) {
       return new Response('Messages are required', { status: 400 })
@@ -83,10 +83,40 @@ export async function POST(req: NextRequest) {
 
     // Create new conversation if none exists
     if (!currentConversationId) {
-      const firstUserMessage = messages.find(m => m.role === 'user')
-      const title = firstUserMessage 
-        ? firstUserMessage.content.split(' ').slice(0, 4).join(' ').slice(0, 50)
-        : 'New Chat'
+      const firstUserMessage = messages.find((m: any) => m.role === 'user')
+      let title = 'New Chat'
+      
+      if (firstUserMessage) {
+        // Extract the actual message without file content for the title
+        let messageForTitle = firstUserMessage.content
+        const fileStartIndex = messageForTitle.indexOf('\n\n=== ATTACHED FILES ===')
+        
+        if (fileStartIndex !== -1) {
+          // Get just the user's message text
+          messageForTitle = messageForTitle.substring(0, fileStartIndex).trim()
+          
+          // If the message references files, include the file count in the title
+          const fileSection = firstUserMessage.content.substring(fileStartIndex)
+          const fileMatches = [...fileSection.matchAll(/\[Attached File \d+: ([^\]]+)\]/g)]
+          
+          if (fileMatches.length > 0) {
+            const baseTitle = messageForTitle.split(' ').slice(0, 3).join(' ')
+            if (fileMatches.length === 1) {
+              // Single file: "summarize this pdf - A3889.pdf"
+              const filename = fileMatches[0][1]
+              title = `${baseTitle} - ${filename}`.slice(0, 50)
+            } else {
+              // Multiple files: "analyze documents - 3 files"
+              title = `${baseTitle} - ${fileMatches.length} files`.slice(0, 50)
+            }
+          } else {
+            title = messageForTitle.split(' ').slice(0, 4).join(' ').slice(0, 50)
+          }
+        } else {
+          // No files attached, use normal title generation
+          title = messageForTitle.split(' ').slice(0, 4).join(' ').slice(0, 50)
+        }
+      }
 
       const conversation = await prisma.conversation.create({
         data: {
@@ -102,11 +132,48 @@ export async function POST(req: NextRequest) {
     // Save user message to database
     const lastUserMessage = messages[messages.length - 1]
     if (lastUserMessage.role === 'user') {
+      // Extract the actual user message without file content
+      let userMessageContent = lastUserMessage.content
+      let messageMetadata = undefined
+      
+      // Check if message contains file attachments
+      const fileStartIndex = userMessageContent.indexOf('\n\n=== ATTACHED FILES ===')
+      if (fileStartIndex !== -1) {
+        // Extract just the user's message text
+        const actualUserMessage = userMessageContent.substring(0, fileStartIndex).trim()
+        
+        // Extract file metadata from the content
+        if (fileMetadata) {
+          messageMetadata = fileMetadata
+        } else if (includeFiles) {
+          // Fallback: parse basic file info from the content
+          const fileSection = userMessageContent.substring(fileStartIndex)
+          const fileMatches = fileSection.matchAll(/\[Attached File \d+: ([^\]]+)\] \(([^)]+)\)/g)
+          const files = []
+          
+          for (const match of fileMatches) {
+            const typeInfo = match[2].split(',')
+            files.push({
+              filename: match[1],
+              type: typeInfo[0]?.trim() || 'Unknown',
+              size: 0 // Size would need to be calculated from content
+            })
+          }
+          
+          if (files.length > 0) {
+            messageMetadata = { files }
+          }
+        }
+        
+        userMessageContent = actualUserMessage
+      }
+      
       await prisma.message.create({
         data: {
           conversationId: currentConversationId,
           role: 'user',
-          content: lastUserMessage.content,
+          content: userMessageContent,
+          metadata: messageMetadata,
         },
       })
     }
@@ -161,7 +228,7 @@ export async function POST(req: NextRequest) {
     // Prepare messages for Ollama
     const messagesForOllama = [
       systemMessage,
-      ...messages.map(msg => ({
+      ...messages.map((msg: any) => ({
         role: msg.role as 'user' | 'assistant' | 'system',
         content: msg.content,
       }))

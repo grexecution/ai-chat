@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { type Citation } from '@/lib/web-search'
+import { unreadStore } from '@/lib/unread-store'
 
 interface Message {
   id: string
@@ -10,6 +11,21 @@ interface Message {
   createdAt: string
   metadata?: {
     citations?: Citation[]
+    files?: Array<{
+      filename: string
+      type: string
+      size: number
+    }>
+  }
+}
+
+interface FileAttachment {
+  filename: string
+  content: string
+  metadata?: {
+    pages?: number
+    wordCount?: number
+    type?: string
   }
 }
 
@@ -19,21 +35,24 @@ interface UseChatOptions {
 }
 
 /**
- * Custom hook for managing chat conversations with streaming support and web search
+ * Custom hook for managing chat conversations with streaming support, web search, and file attachments
  * 
  * @param options - Configuration options for the chat
  * @param options.conversationId - Existing conversation ID to continue
  * @param options.onNewConversation - Callback when a new conversation is created
  * 
  * @returns Chat state and control functions
- * @returns messages - Array of chat messages with potential citations
+ * @returns messages - Array of chat messages with potential citations and file metadata
  * @returns isLoading - Loading state indicator
  * @returns streamingMessage - Current streaming assistant response
  * @returns isSearching - Whether web search is in progress
  * @returns currentCitations - Citations for the current streaming message
- * @returns sendMessage - Function to send a new message
+ * @returns attachedFiles - Currently attached files
+ * @returns sendMessage - Function to send a new message with optional files
  * @returns loadMessages - Function to load messages for a conversation
  * @returns clearMessages - Function to clear all messages
+ * @returns attachFiles - Function to attach files for the next message
+ * @returns removeFile - Function to remove an attached file
  */
 export function useChat({ conversationId, onNewConversation }: UseChatOptions = {}) {
   const [messages, setMessages] = useState<Message[]>([])
@@ -41,6 +60,8 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
   const [streamingMessage, setStreamingMessage] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [currentCitations, setCurrentCitations] = useState<Citation[]>([])
+  const [attachedFiles, setAttachedFiles] = useState<FileAttachment[]>([])
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false)
 
   /**
    * Loads messages for a specific conversation from the API
@@ -59,7 +80,58 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
   }, [])
 
   /**
-   * Sends a message to the chat API and handles streaming response with web search
+   * Attach files for the next message
+   * @param files - FileList or array of Files to attach
+   */
+  const attachFiles = useCallback(async (files: FileList | File[]) => {
+    setIsUploadingFiles(true)
+    
+    try {
+      const formData = new FormData()
+      const fileArray = Array.from(files)
+      
+      fileArray.forEach(file => {
+        formData.append('files', file)
+      })
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error(await response.text())
+      }
+
+      const result = await response.json()
+      
+      // Add parsed files to attachments
+      const newAttachments: FileAttachment[] = result.files.map((file: any) => ({
+        filename: file.filename,
+        content: file.content,
+        metadata: file.metadata
+      }))
+
+      setAttachedFiles(prev => [...prev, ...newAttachments])
+
+    } catch (error) {
+      console.error('Failed to attach files:', error)
+      throw error
+    } finally {
+      setIsUploadingFiles(false)
+    }
+  }, [])
+
+  /**
+   * Remove an attached file
+   * @param filename - The name of the file to remove
+   */
+  const removeFile = useCallback((filename: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.filename !== filename))
+  }, [])
+
+  /**
+   * Sends a message to the chat API and handles streaming response with web search and file context
    * 
    * @param content - The message content to send
    * @param model - The AI model to use for generation
@@ -67,20 +139,44 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
    * @description
    * This function:
    * 1. Creates a user message and adds it to the UI
-   * 2. Sends the message to the API with conversation context
-   * 3. Handles web search if needed based on query content
-   * 4. Handles SSE streaming for real-time response updates
-   * 5. Manages conversation creation for new chats
-   * 6. Updates UI with streaming content, citations, and final message
+   * 2. Includes any attached files in the message context
+   * 3. Sends the message to the API with conversation context
+   * 4. Handles web search if needed based on query content
+   * 5. Handles SSE streaming for real-time response updates
+   * 6. Manages conversation creation for new chats
+   * 7. Updates UI with streaming content, citations, and final message
    */
   const sendMessage = useCallback(async (content: string, model: string) => {
-    if (!content.trim()) return
+    if (!content.trim() && attachedFiles.length === 0) return
+
+    // Build message content with file context
+    let fullContent = content.trim()
+    
+    if (attachedFiles.length > 0) {
+      const fileContext = attachedFiles.map((file, index) => {
+        const header = `[Attached File ${index + 1}: ${file.filename}]`
+        const metadata = file.metadata 
+          ? `(${file.metadata.type || 'Document'}, ${file.metadata.wordCount || 0} words${file.metadata.pages ? `, ${file.metadata.pages} pages` : ''})`
+          : ''
+        
+        return `${header} ${metadata}\n${file.content.slice(0, 5000)}${file.content.length > 5000 ? '...[truncated]' : ''}`
+      }).join('\n\n')
+
+      fullContent = `${content.trim()}\n\n=== ATTACHED FILES ===\n${fileContext}\n=== END OF FILES ===`
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: content.trim(),
+      content: content.trim(), // Show only the user's message in UI
       createdAt: new Date().toISOString(),
+      metadata: attachedFiles.length > 0 ? {
+        files: attachedFiles.map(f => ({
+          filename: f.filename,
+          type: f.metadata?.type || 'Unknown',
+          size: f.content.length
+        }))
+      } : undefined
     }
 
     setMessages(prev => [...prev, userMessage])
@@ -88,16 +184,30 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
     setStreamingMessage('')
     setIsSearching(false)
     setCurrentCitations([])
+    
+    // Clear attached files after sending
+    const filesForRequest = [...attachedFiles]
+    setAttachedFiles([])
 
     try {
+      // Build messages array with full content for API
+      const messagesForAPI = [...messages, {
+        role: userMessage.role,
+        content: fullContent // Include file context in API request
+      }]
+
       const payload = {
-        messages: [...messages, userMessage].map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
+        messages: messagesForAPI,
         model,
         conversationId,
-        enableWebSearch: true // Enable web search by default
+        includeFiles: filesForRequest.length > 0,
+        fileMetadata: filesForRequest.length > 0 ? {
+          files: filesForRequest.map(f => ({
+            filename: f.filename,
+            type: f.metadata?.type || 'Unknown',
+            size: f.content.length
+          }))
+        } : undefined
       }
 
       const res = await fetch('/api/v1/chat/completions', {
@@ -130,7 +240,6 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
             const data = line.slice(6)
             
             if (data === '[DONE]') {
-              // Stream is complete, break out of the while loop
               break
             }
 
@@ -141,7 +250,6 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
               if (parsed.isSearching !== undefined) {
                 setIsSearching(parsed.isSearching)
                 if (parsed.searchMessage) {
-                  // Optionally show search message in UI
                   console.log('Search status:', parsed.searchMessage)
                 }
               }
@@ -169,7 +277,6 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
               
               // Check if this is the final chunk with finish_reason
               if (parsed.choices?.[0]?.finish_reason === 'stop') {
-                // Stream is complete
                 break
               }
             } catch (e) {
@@ -181,9 +288,9 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
 
       // Clear streaming message first, then add final assistant message
       if (assistantContent) {
-        setStreamingMessage('') // Clear streaming message first
-        setIsSearching(false) // Clear search status
-        setCurrentCitations([]) // Clear current citations
+        setStreamingMessage('')
+        setIsSearching(false)
+        setCurrentCitations([])
         
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
@@ -214,7 +321,7 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
       setIsSearching(false)
       setCurrentCitations([])
     }
-  }, [messages, conversationId, onNewConversation])
+  }, [messages, conversationId, onNewConversation, attachedFiles])
 
   /**
    * Clears all messages and streaming state
@@ -224,6 +331,7 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
     setStreamingMessage('')
     setIsSearching(false)
     setCurrentCitations([])
+    setAttachedFiles([])
   }, [])
 
   return {
@@ -232,8 +340,12 @@ export function useChat({ conversationId, onNewConversation }: UseChatOptions = 
     streamingMessage,
     isSearching,
     currentCitations,
+    attachedFiles,
+    isUploadingFiles,
     sendMessage,
     loadMessages,
     clearMessages,
+    attachFiles,
+    removeFile,
   }
 }

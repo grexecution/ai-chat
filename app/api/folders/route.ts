@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { name, color, icon } = await req.json()
+    const { name, color } = await req.json()
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         userId: session.user.id,
         name: name.trim(),
         color: color || '#10b981', // Default emerald color
-        icon: icon || '📁',
+        icon: '📁', // Default icon (still in DB but not user-selectable)
         position: newPosition
       }
     })

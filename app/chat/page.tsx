@@ -14,6 +14,7 @@ export default function ChatPage() {
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>()
   const [currentModel, setCurrentModel] = useState('llama3.2:latest')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   
   const {
     messages,
@@ -21,13 +22,18 @@ export default function ChatPage() {
     streamingMessage,
     isSearching,
     currentCitations,
+    attachedFiles,
+    isUploadingFiles,
     sendMessage,
     loadMessages,
     clearMessages,
+    attachFiles,
+    removeFile,
   } = useChat({
     conversationId: currentConversationId,
     onNewConversation: (conversationId) => {
       setCurrentConversationId(conversationId)
+      setRefreshTrigger(prev => prev + 1) // Trigger sidebar refresh
     },
   })
 
@@ -101,6 +107,7 @@ export default function ChatPage() {
             currentConversationId={currentConversationId}
             onSelectConversation={setCurrentConversationId}
             onNewConversation={() => setCurrentConversationId(undefined)}
+            refreshTrigger={refreshTrigger}
           />
         </div>
 
@@ -127,6 +134,7 @@ export default function ChatPage() {
                   setCurrentConversationId(undefined)
                   setIsSidebarOpen(false)
                 }}
+                refreshTrigger={refreshTrigger}
               />
             </div>
           </>
@@ -140,12 +148,17 @@ export default function ChatPage() {
               isLoading={isLoading}
               isSearching={isSearching}
               currentCitations={currentCitations}
+              conversationId={currentConversationId}
             />
           </div>
           
           <div className="flex-shrink-0">
             <ChatComposer
               onSendMessage={handleSendMessage}
+              onAttachFiles={attachFiles}
+              onRemoveFile={removeFile}
+              attachedFiles={attachedFiles}
+              isUploadingFiles={isUploadingFiles}
               disabled={isLoading}
               currentModel={currentModel}
               onModelChange={setCurrentModel}

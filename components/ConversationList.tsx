@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, memo, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { Folder, Conversation, FOLDER_COLORS, FOLDER_ICONS } from '@/types'
+import { Folder, Conversation, FOLDER_COLORS } from '@/types'
 import { logger } from '@/lib/logger'
+import { useUnreadMessages } from '@/hooks/useUnreadMessages'
 
 interface ConversationListProps {
   onSelectConversation: (conversationId: string) => void
@@ -11,6 +12,7 @@ interface ConversationListProps {
   onNewConversation: () => void
   currentFolderId?: string
   onSelectFolder?: (folderId: string | null) => void
+  refreshTrigger?: number
 }
 
 function ConversationList({ 
@@ -18,15 +20,16 @@ function ConversationList({
   currentConversationId, 
   onNewConversation,
   currentFolderId: _currentFolderId,
-  onSelectFolder: _onSelectFolder
+  onSelectFolder: _onSelectFolder,
+  refreshTrigger
 }: ConversationListProps) {
   const { data: session } = useSession()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
   const [loading, setLoading] = useState(true)
+  const { unreadConversations, markRead } = useUnreadMessages()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [draggingConversationId, setDraggingConversationId] = useState<string | null>(null)
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   
@@ -34,9 +37,18 @@ function ConversationList({
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [selectedColor, setSelectedColor] = useState<string>(FOLDER_COLORS[0].value)
-  const [selectedIcon, setSelectedIcon] = useState<string>(FOLDER_ICONS[0])
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
   const [editFolderName, setEditFolderName] = useState('')
+  
+  // Delete confirmation modal state
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    show: boolean
+    conversationId?: string
+    conversationTitle?: string
+  }>({ show: false })
+  
+  // Track expanded folders - start with all folders collapsed
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
 
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
@@ -60,8 +72,8 @@ function ConversationList({
       if (res.ok) {
         const data = await res.json()
         setFolders(data)
-        // Expand all folders by default
-        setExpandedFolders(new Set(data.map((f: Folder) => f.id)))
+        // Start with all folders collapsed
+        setExpandedFolders(new Set())
       }
     } catch (error) {
       logger.error('Failed to fetch folders', error)
@@ -74,6 +86,19 @@ function ConversationList({
       fetchFolders()
     }
   }, [session, fetchConversations, fetchFolders])
+
+  // Refresh when a new conversation is created
+  useEffect(() => {
+    if (currentConversationId && refreshTrigger) {
+      fetchConversations()
+    }
+  }, [currentConversationId, refreshTrigger, fetchConversations])
+
+  // Clear unread when selecting a conversation
+  const handleSelectConversation = useCallback((id: string) => {
+    markRead(id)
+    onSelectConversation(id)
+  }, [onSelectConversation, markRead])
 
   // Group conversations by folder
   const groupedConversations = useMemo(() => {
@@ -106,24 +131,22 @@ function ConversationList({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           name: newFolderName.trim(), 
-          color: selectedColor, 
-          icon: selectedIcon 
+          color: selectedColor
         })
       })
       
       if (res.ok) {
         const newFolder = await res.json()
         setFolders(prev => [...prev, newFolder])
-        setExpandedFolders(prev => new Set(prev).add(newFolder.id))
+        // Don't auto-expand new folders
         setNewFolderName('')
         setIsCreatingFolder(false)
         setSelectedColor(FOLDER_COLORS[0].value)
-        setSelectedIcon(FOLDER_ICONS[0])
       }
     } catch (error) {
       logger.error('Failed to create folder', error)
     }
-  }, [newFolderName, selectedColor, selectedIcon])
+  }, [newFolderName, selectedColor])
 
   const handleUpdateFolder = useCallback(async (id: string, name: string) => {
     if (!name.trim()) return
@@ -169,8 +192,6 @@ function ConversationList({
 
   // Conversation operations
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm('Delete this conversation?')) return
-
     try {
       const res = await fetch(`/api/conversations/${id}`, {
         method: 'DELETE',
@@ -181,11 +202,20 @@ function ConversationList({
         if (currentConversationId === id) {
           onNewConversation()
         }
+        setDeleteConfirmation({ show: false })
       }
     } catch (error) {
       logger.error('Failed to delete conversation', error)
     }
   }, [conversations, currentConversationId, onNewConversation])
+  
+  const showDeleteConfirmation = useCallback((id: string, title: string) => {
+    setDeleteConfirmation({
+      show: true,
+      conversationId: id,
+      conversationTitle: title
+    })
+  }, [])
 
   const handleRename = useCallback(async (id: string, newTitle: string) => {
     if (!newTitle.trim()) return
@@ -256,17 +286,56 @@ function ConversationList({
     })
   }, [])
 
+  // Format date in Austrian German format
+  const formatAustrianDate = (date: string | Date) => {
+    const d = new Date(date)
+    const now = new Date()
+    const diffTime = Math.abs(now.getTime() - d.getTime())
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60))
+    const diffMinutes = Math.floor(diffTime / (1000 * 60))
+
+    // Today
+    if (diffDays === 0) {
+      if (diffMinutes < 1) return 'gerade eben'
+      if (diffMinutes < 60) return `vor ${diffMinutes} Min.`
+      if (diffHours === 1) return 'vor 1 Stunde'
+      return `vor ${diffHours} Stunden`
+    }
+    
+    // Yesterday
+    if (diffDays === 1) return 'gestern'
+    
+    // This week
+    if (diffDays < 7) {
+      const weekdays = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
+      return weekdays[d.getDay()]
+    }
+    
+    // This month
+    if (diffDays < 30) {
+      return `vor ${diffDays} Tagen`
+    }
+    
+    // Older - Austrian format: DD.MM.YYYY
+    return d.toLocaleDateString('de-AT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+  }
+
   const renderConversation = (conversation: Conversation) => (
     <div
       key={conversation.id}
       draggable
       onDragStart={(e) => handleDragStart(e, conversation.id)}
-      className={`group relative p-3 rounded-lg cursor-pointer transition-all ${
+      className={`group relative p-2.5 rounded-lg cursor-pointer transition-all ${
         currentConversationId === conversation.id
-          ? 'bg-emerald-900/30 border border-emerald-600/30'
-          : 'hover:bg-zinc-800/50 border border-transparent'
+          ? 'bg-emerald-900/20 border border-emerald-600/30 shadow-sm'
+          : 'hover:bg-zinc-800/30 border border-transparent hover:border-zinc-700/30'
       } ${draggingConversationId === conversation.id ? 'opacity-50' : ''}`}
-      onClick={() => onSelectConversation(conversation.id)}
+      onClick={() => handleSelectConversation(conversation.id)}
     >
       {editingId === conversation.id ? (
         <div className="space-y-2">
@@ -290,9 +359,14 @@ function ConversationList({
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-zinc-100 truncate pr-2">
-              {conversation.title}
-            </h3>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h3 className="text-sm font-medium text-zinc-200 truncate">
+                {conversation.title}
+              </h3>
+              {unreadConversations.has(conversation.id) && (
+                <div className="flex-shrink-0 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              )}
+            </div>
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={(e) => {
@@ -310,7 +384,7 @@ function ConversationList({
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  handleDelete(conversation.id)
+                  showDeleteConfirmation(conversation.id, conversation.title)
                 }}
                 className="p-1 hover:bg-red-600/20 rounded text-zinc-400 hover:text-red-400"
                 title="Delete"
@@ -322,10 +396,14 @@ function ConversationList({
             </div>
           </div>
           <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
-            <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-emerald-400">
-              {conversation.model}
+            <span className="flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+              {(conversation as any)._count?.messages || 0} Nachrichten
             </span>
-            <span>{new Date(conversation.updatedAt).toLocaleDateString()}</span>
+            <span className="text-zinc-600">•</span>
+            <span>{formatAustrianDate(conversation.updatedAt)}</span>
           </div>
         </>
       )}
@@ -358,7 +436,7 @@ function ConversationList({
       </div>
 
       {/* Conversations and Folders */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {/* Folder creation UI */}
         {isCreatingFolder && (
           <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-800/50 space-y-2">
@@ -378,36 +456,18 @@ function ConversationList({
               autoFocus
             />
             
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1">
-                {FOLDER_COLORS.slice(0, 8).map((color) => (
-                  <button
-                    key={color.value}
-                    onClick={() => setSelectedColor(color.value)}
-                    className={`w-5 h-5 rounded transition-transform ${
-                      selectedColor === color.value ? 'scale-125 ring-2 ring-zinc-600' : 'hover:scale-110'
-                    }`}
-                    style={{ backgroundColor: color.value }}
-                    title={color.name}
-                  />
-                ))}
-              </div>
-              
-              <div className="flex gap-1">
-                {FOLDER_ICONS.slice(0, 5).map((icon) => (
-                  <button
-                    key={icon}
-                    onClick={() => setSelectedIcon(icon)}
-                    className={`w-6 h-6 flex items-center justify-center rounded transition-all ${
-                      selectedIcon === icon 
-                        ? 'bg-zinc-700 scale-110' 
-                        : 'hover:bg-zinc-800'
-                    }`}
-                  >
-                    {icon}
-                  </button>
-                ))}
-              </div>
+            <div className="flex gap-1">
+              {FOLDER_COLORS.slice(0, 8).map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() => setSelectedColor(color.value)}
+                  className={`w-5 h-5 rounded transition-transform ${
+                    selectedColor === color.value ? 'scale-125 ring-2 ring-zinc-600' : 'hover:scale-110'
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
             </div>
 
             <div className="flex gap-1">
@@ -431,24 +491,32 @@ function ConversationList({
           </div>
         )}
 
-        {/* Add folder button */}
+        {/* Add folder button - styled like a folder */}
         {!isCreatingFolder && (
-          <button
+          <div
             onClick={() => setIsCreatingFolder(true)}
-            className="w-full flex items-center gap-2 p-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 rounded-lg transition-colors text-sm"
+            className="group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer hover:bg-zinc-800/30"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {/* White folder icon */}
+            <svg className="w-4 h-4 text-zinc-400" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+            </svg>
+            
+            <span className="flex-1 text-xs font-medium text-zinc-400 uppercase tracking-wide">
+              Neuer Ordner
+            </span>
+            
+            <svg className="w-3 h-3 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            New Folder
-          </button>
+          </div>
         )}
 
         {/* Folders with conversations */}
         {folders.map((folder) => (
-          <div key={folder.id} className="space-y-2">
+          <div key={folder.id} className="space-y-1.5">
             <div
-              className={`group flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-zinc-800/50 transition-colors ${
+              className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer hover:bg-zinc-800/30 ${
                 dragOverFolderId === folder.id ? 'bg-zinc-800/50 ring-2 ring-emerald-600' : ''
               }`}
               onClick={() => toggleFolder(folder.id)}
@@ -457,21 +525,15 @@ function ConversationList({
               onDragLeave={() => setDragOverFolderId(null)}
               onDrop={(e) => handleDrop(e, folder.id)}
             >
+              {/* Folder icon with custom color */}
               <svg 
-                className={`w-3 h-3 text-zinc-400 transition-transform ${
-                  expandedFolders.has(folder.id) ? 'rotate-90' : ''
-                }`} 
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
+                className="w-4 h-4 flex-shrink-0" 
+                fill="currentColor" 
+                viewBox="0 0 20 20"
+                style={{ color: folder.color || '#10b981' }}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
               </svg>
-              <div 
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: folder.color || '#10b981' }}
-              />
-              <span className="text-sm">{folder.icon || '📁'}</span>
               
               {editingFolderId === folder.id ? (
                 <input
@@ -491,7 +553,7 @@ function ConversationList({
                   autoFocus
                 />
               ) : (
-                <span className="flex-1 text-sm font-medium text-zinc-300">
+                <span className="flex-1 text-xs font-medium text-zinc-400 uppercase tracking-wide">
                   {folder.name}
                 </span>
               )}
@@ -529,34 +591,27 @@ function ConversationList({
               </div>
             </div>
             
+            {/* Show folder contents when expanded */}
             {expandedFolders.has(folder.id) && (
-              <div className="ml-6 space-y-2">
+              <div className="space-y-1.5 ml-6 pl-3 border-l border-zinc-800/50">
                 {groupedConversations[folder.id]?.map(renderConversation)}
               </div>
             )}
           </div>
         ))}
 
-        {/* Unfiled conversations */}
+        {/* Unfiled conversations - No folder header, just conversations */}
         {groupedConversations.unfiled.length > 0 && (
-          <div className="space-y-2">
-            <div
-              className={`flex items-center gap-2 p-2 rounded-lg ${
-                dragOverFolderId === 'unfiled' ? 'bg-zinc-800/50 ring-2 ring-emerald-600' : ''
-              }`}
-              onDragOver={handleDragOver}
-              onDragEnter={() => setDragOverFolderId('unfiled')}
-              onDragLeave={() => setDragOverFolderId(null)}
-              onDrop={(e) => handleDrop(e, null)}
-            >
-              <span className="text-sm font-medium text-zinc-500">Unfiled</span>
-              <span className="text-xs text-zinc-600">
-                {groupedConversations.unfiled.length}
-              </span>
-            </div>
-            <div className="space-y-2">
-              {groupedConversations.unfiled.map(renderConversation)}
-            </div>
+          <div 
+            className={`space-y-1.5 ${
+              dragOverFolderId === 'unfiled' ? 'bg-zinc-800/20 rounded-lg p-2' : ''
+            }`}
+            onDragOver={handleDragOver}
+            onDragEnter={() => setDragOverFolderId('unfiled')}
+            onDragLeave={() => setDragOverFolderId(null)}
+            onDrop={(e) => handleDrop(e, null)}
+          >
+            {groupedConversations.unfiled.map(renderConversation)}
           </div>
         )}
 
@@ -568,6 +623,67 @@ function ConversationList({
           </div>
         )}
       </div>
+      
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation.show && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-in fade-in">
+            {/* Modal */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-in zoom-in-95">
+              <div className="flex flex-col items-start gap-4">
+                {/* Warning Icon */}
+                <div className="flex-shrink-0 w-12 h-12 bg-red-600/20 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                
+                {/* Content */}
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-zinc-100 mb-2">
+                    Chat unwiderruflich löschen?
+                  </h3>
+                  <p className="text-sm text-zinc-400 mb-3">
+                    Sie sind dabei, den Chat <span className="text-zinc-200 font-medium">&quot;{deleteConfirmation.conversationTitle}&quot;</span> zu löschen.
+                  </p>
+                  <div className="bg-red-950/30 border border-red-900/30 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-red-300">
+                      <strong>⚠️ Achtung:</strong> Diese Aktion kann nicht rückgängig gemacht werden!
+                    </p>
+                    <p className="text-xs text-red-400 mt-2">
+                      Alle Nachrichten und Daten dieses Chats werden permanent von allen Servern und Speichermedien gelöscht und können nicht wiederhergestellt werden.
+                    </p>
+                  </div>
+                  
+                  {/* Buttons */}
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => setDeleteConfirmation({ show: false })}
+                      className="px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (deleteConfirmation.conversationId) {
+                          handleDelete(deleteConfirmation.conversationId)
+                        }
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Löschen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
