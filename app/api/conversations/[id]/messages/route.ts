@@ -35,6 +35,7 @@ export async function GET(
         role: true,
         content: true,
         createdAt: true,
+        metadata: true,
       },
     })
 
@@ -89,6 +90,7 @@ export async function POST(
         role: true,
         content: true,
         createdAt: true,
+        metadata: true,
       },
     })
 
