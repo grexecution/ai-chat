@@ -29,7 +29,7 @@ export const UI_CONFIG = {
 
 // Model Configuration
 export const MODEL_CONFIG = {
-  DEFAULT: 'llama3.2:3b',  // Default model
+  DEFAULT: 'llama3.2:1b',  // Default model
   TEMPERATURE: 0.7,
   TOP_P: 0.9,
 } as const

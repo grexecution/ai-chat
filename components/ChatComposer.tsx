@@ -22,7 +22,7 @@ interface ChatComposerProps {
 }
 
 const AVAILABLE_MODELS = [
-  { id: 'llama3.2:3b', name: 'LLaMA 3.2 (Balanced)', description: '⚖️ Best accuracy vs speed, 128K context' },
+  { id: 'llama3.2:1b', name: 'LLaMA 3.2 (1B)', description: '⚡ Fast and efficient, low memory usage' },
 ]
 
 function ChatComposer({ 

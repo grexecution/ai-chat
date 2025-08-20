@@ -67,7 +67,7 @@ export class OllamaToOpenAIStream {
                 id: `chatcmpl-${Date.now()}`,
                 object: 'chat.completion.chunk',
                 created: Math.floor(Date.now() / 1000),
-                model: 'llama3.2',
+                model: 'llama3.2:1b',
                 choices: [{
                   index: 0,
                   delta: {},
@@ -97,7 +97,7 @@ export class OllamaToOpenAIStream {
                     id: `chatcmpl-${Date.now()}`,
                     object: 'chat.completion.chunk',
                     created: Math.floor(Date.now() / 1000),
-                    model: ollamaData.model || 'llama3.2',
+                    model: ollamaData.model || 'llama3.2:1b',
                     choices: [{
                       index: 0,
                       delta: isFirstChunk 
@@ -149,7 +149,7 @@ export function createOpenAIStreamResponse(content: string): ReadableStream<Uint
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model: 'llama3.2',
+        model: 'llama3.2:1b',
         choices: [{
           index: 0,
           delta: { role: 'assistant', content: content },
@@ -164,7 +164,7 @@ export function createOpenAIStreamResponse(content: string): ReadableStream<Uint
         id: `chatcmpl-${Date.now()}`,
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
-        model: 'llama3.2',
+        model: 'llama3.2:1b',
         choices: [{
           index: 0,
           delta: {},
@@ -207,7 +207,7 @@ export function streamText(text: string): ReadableStream<Uint8Array> {
             id: `chatcmpl-${Date.now()}`,
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
-            model: 'llama3.2',
+            model: 'llama3.2:1b',
             choices: [{
               index: 0,
               delta: {},
@@ -228,7 +228,7 @@ export function streamText(text: string): ReadableStream<Uint8Array> {
           id: `chatcmpl-${Date.now()}`,
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
-          model: 'llama3.2',
+          model: 'llama3.2:1b',
           choices: [{
             index: 0,
             delta: isFirst 

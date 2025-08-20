@@ -12,7 +12,7 @@ export default function ChatPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>()
-  const [currentModel, setCurrentModel] = useState('llama3.2:latest')
+  const [currentModel, setCurrentModel] = useState('llama3.2:1b')
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   

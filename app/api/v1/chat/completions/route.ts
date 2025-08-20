@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
         data: {
           userId,
           title,
-          model: model || 'llama3.2:latest',
+          model: model || 'llama3.2:1b',
         },
       })
 
@@ -249,7 +249,7 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: model || 'llama3.2:latest',
+        model: model || 'llama3.2:1b',
         messages: messagesForOllama,
         stream: true,
         options: {
@@ -331,7 +331,7 @@ export async function POST(req: NextRequest) {
                 id: `chatcmpl-${Date.now()}`,
                 object: 'chat.completion.chunk',
                 created: Math.floor(Date.now() / 1000),
-                model: model || 'llama3.2:latest',
+                model: model || 'llama3.2:1b',
                 choices: [{
                   index: 0,
                   delta: {},
@@ -363,7 +363,7 @@ export async function POST(req: NextRequest) {
                       id: `chatcmpl-${Date.now()}`,
                       object: 'chat.completion.chunk',
                       created: Math.floor(Date.now() / 1000),
-                      model: model || 'llama3.2:latest',
+                      model: model || 'llama3.2:1b',
                       choices: [{
                         index: 0,
                         delta: { content: ollamaData.message.content },
@@ -387,7 +387,7 @@ export async function POST(req: NextRequest) {
             id: `chatcmpl-${Date.now()}`,
             object: 'chat.completion.chunk',
             created: Math.floor(Date.now() / 1000),
-            model: model || 'llama3.2:latest',
+            model: model || 'llama3.2:1b',
             choices: [{
               index: 0,
               delta: { content: 'Sorry, I encountered an error processing your request.' },

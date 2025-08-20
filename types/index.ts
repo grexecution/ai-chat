@@ -60,8 +60,7 @@ export interface Model {
 }
 
 export const AVAILABLE_MODELS: Model[] = [
-  { id: 'llama3.2:latest', name: 'LLaMA 3.2', description: 'Latest model, fast and accurate' },
-  { id: 'llama3.1:8b', name: 'LLaMA 3.1 8B', description: 'Powerful 8B parameter model' },
+  { id: 'llama3.2:1b', name: 'LLaMA 3.2 (1B)', description: 'Fast and efficient, low memory usage' },
   { id: 'tinyllama:latest', name: 'TinyLLaMA', description: 'Lightweight and fast' },
 ]
 
@@ -70,7 +69,7 @@ export const CONSTANTS = {
   MAX_TITLE_LENGTH: 50,
   MAX_FOLDER_NAME_LENGTH: 30,
   SESSION_MAX_AGE: 30 * 24 * 60 * 60, // 30 days
-  DEFAULT_MODEL: 'llama3.2:latest',
+  DEFAULT_MODEL: 'llama3.2:1b',
   OLLAMA_URL: process.env.OLLAMA_URL || 'http://localhost:11434',
 } as const
 
