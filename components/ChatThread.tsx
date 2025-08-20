@@ -302,14 +302,10 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
           <div className="max-w-2xl w-full">
             <div className="text-6xl mb-4">🤖</div>
             <h2 className="text-2xl font-bold text-emerald-400 mb-2">Welcome to Gibby Chat</h2>
-            <p className="text-zinc-400 mb-6">
-              Your private AI assistant powered by local LLMs. Your conversations stay secure and private.
-            </p>
             
             {/* Example Prompts */}
             {onSendMessage && (
               <div className="mb-6">
-                <p className="text-sm text-zinc-500 mb-3">Try asking:</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
                   <button
                     onClick={() => onSendMessage("Explain quantum computing in simple terms")}

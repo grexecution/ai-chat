@@ -215,7 +215,7 @@ function ChatComposer({
                 onKeyDown={handleKeyDown}
                 disabled={disabled || isUploadingFiles}
                 placeholder={dragActive ? "Drop files here..." : "Ask me anything or drop files..."}
-                className="w-full bg-transparent text-zinc-100 placeholder-zinc-500 p-4 pr-24 resize-none focus:outline-none min-h-[60px] md:min-h-[60px] max-md:min-h-[80px] max-h-40 md:text-base max-md:text-lg"
+                className="w-full bg-transparent text-zinc-100 placeholder-zinc-500 p-4 pr-24 resize-none focus:outline-none min-h-[60px] md:min-h-[60px] max-md:min-h-[80px] max-h-40 md:text-base max-md:text-sm"
                 rows={1}
               />
             
