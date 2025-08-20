@@ -30,8 +30,12 @@ export const UI_CONFIG = {
 // Model Configuration
 export const MODEL_CONFIG = {
   DEFAULT: 'llama3.2:1b',  // Default model
-  TEMPERATURE: 0.7,
-  TOP_P: 0.9,
+  // Optimized for concise, efficient responses
+  TEMPERATURE: 0.3,  // Lower = more focused
+  TOP_P: 0.7,        // Lower = more deterministic
+  TOP_K: 40,         // Limit vocabulary for speed
+  REPEAT_PENALTY: 1.1,
+  MAX_TOKENS: 500,   // Shorter responses
 } as const
 
 // Session Configuration
