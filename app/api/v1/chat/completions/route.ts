@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
     const systemMessage = {
       role: 'system' as const,
       content: searchContext 
-        ? 'You are a helpful AI assistant with access to current web search results. Use the provided search results to give accurate, up-to-date information. Always cite your sources using [1], [2], etc. Do NOT say you cannot provide current information - you have the search results below.'
+        ? 'You are a helpful AI assistant with access to current web search results. Use the provided search results to give concise, accurate, up-to-date information. Always cite your sources using [1], [2], etc. Do NOT say you cannot provide current information - you have the search results below.'
         : 'You are a helpful AI assistant. Provide concise, direct answers based on your knowledge.'
     }
     
