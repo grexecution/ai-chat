@@ -68,6 +68,8 @@ model Folder {
   icon          String?        // Emoji or icon identifier
   position      Int            @default(0) // For ordering folders
   isExpanded    Boolean        @default(true)
+  isPrivate     Boolean        @default(false) // Privacy flag
+  passwordHash  String?        // Hashed password for private folders
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   conversations Conversation[]

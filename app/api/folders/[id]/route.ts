@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
+import bcrypt from 'bcryptjs'
 
 /**
  * PATCH /api/folders/[id] - Update a folder
@@ -18,7 +19,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { name, color, icon, isExpanded } = await req.json()
+    const { name, color, icon, isExpanded, isPrivate, currentPassword, password } = await req.json()
 
     // Verify folder ownership
     const folder = await prisma.folder.findFirst({
@@ -32,13 +33,40 @@ export async function PATCH(
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
     }
 
+    // If folder was private and still is private, verify current password
+    if (folder.isPrivate && folder.passwordHash && isPrivate) {
+      if (!currentPassword) {
+        return NextResponse.json({ error: 'Current password is required to modify a private folder' }, { status: 400 })
+      }
+      
+      const isValidPassword = await bcrypt.compare(currentPassword, folder.passwordHash)
+      if (!isValidPassword) {
+        return NextResponse.json({ error: 'Incorrect current password' }, { status: 401 })
+      }
+    }
+
+    // Handle password update for private folders
+    let passwordHash = folder.passwordHash
+    if (isPrivate) {
+      // If a new password is provided, hash it
+      if (password) {
+        passwordHash = await bcrypt.hash(password, 10)
+      }
+      // Otherwise keep the existing password hash
+    } else {
+      // If folder is no longer private, remove password
+      passwordHash = null
+    }
+
     const updatedFolder = await prisma.folder.update({
       where: { id },
       data: {
         ...(name !== undefined && { name: name.trim() }),
         ...(color !== undefined && { color }),
         ...(icon !== undefined && { icon }),
-        ...(isExpanded !== undefined && { isExpanded })
+        ...(isExpanded !== undefined && { isExpanded }),
+        ...(isPrivate !== undefined && { isPrivate }),
+        ...(passwordHash !== undefined && { passwordHash })
       }
     })
 

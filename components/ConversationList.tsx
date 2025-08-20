@@ -37,8 +37,19 @@ function ConversationList({
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [selectedColor, setSelectedColor] = useState<string>(FOLDER_COLORS[0].value)
+  const [newFolderPrivate, setNewFolderPrivate] = useState(false)
+  const [newFolderPassword, setNewFolderPassword] = useState('')
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
   const [editFolderName, setEditFolderName] = useState('')
+  const [editFolderColor, setEditFolderColor] = useState<string>(FOLDER_COLORS[0].value)
+  const [editFolderPrivate, setEditFolderPrivate] = useState(false)
+  const [editFolderCurrentPassword, setEditFolderCurrentPassword] = useState('')
+  const [editFolderNewPassword, setEditFolderNewPassword] = useState('')
+  const [editFolderWasPrivate, setEditFolderWasPrivate] = useState(false)
+  const [folderPasswords, setFolderPasswords] = useState<{ [key: string]: string }>({})
+  const [passwordPrompt, setPasswordPrompt] = useState<{ folderId: string; name: string } | null>(null)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState(false)
   
   // Delete confirmation modal state
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -124,6 +135,10 @@ function ConversationList({
   // Folder CRUD operations
   const handleCreateFolder = useCallback(async () => {
     if (!newFolderName.trim()) return
+    if (newFolderPrivate && !newFolderPassword) {
+      alert('Please enter a password for the private folder')
+      return
+    }
 
     try {
       const res = await fetch('/api/folders', {
@@ -131,7 +146,9 @@ function ConversationList({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           name: newFolderName.trim(), 
-          color: selectedColor
+          color: selectedColor,
+          isPrivate: newFolderPrivate,
+          password: newFolderPrivate ? newFolderPassword : undefined
         })
       })
       
@@ -142,33 +159,62 @@ function ConversationList({
         setNewFolderName('')
         setIsCreatingFolder(false)
         setSelectedColor(FOLDER_COLORS[0].value)
+        setNewFolderPrivate(false)
+        setNewFolderPassword('')
       }
     } catch (error) {
       logger.error('Failed to create folder', error)
     }
-  }, [newFolderName, selectedColor])
+  }, [newFolderName, selectedColor, newFolderPrivate, newFolderPassword])
 
-  const handleUpdateFolder = useCallback(async (id: string, name: string) => {
-    if (!name.trim()) return
+  const handleUpdateFolder = useCallback(async (id: string) => {
+    if (!editFolderName.trim()) return
+
+    // Validate password requirements
+    if (editFolderWasPrivate && editFolderPrivate && !editFolderCurrentPassword) {
+      alert('Please enter the current password to change folder settings')
+      return
+    }
+    
+    if (editFolderPrivate && !editFolderWasPrivate && !editFolderNewPassword) {
+      alert('Please enter a password for the private folder')
+      return
+    }
 
     try {
       const res = await fetch(`/api/folders/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() })
+        body: JSON.stringify({ 
+          name: editFolderName.trim(),
+          color: editFolderColor,
+          isPrivate: editFolderPrivate,
+          currentPassword: editFolderWasPrivate ? editFolderCurrentPassword : undefined,
+          password: editFolderPrivate ? editFolderNewPassword : undefined
+        })
       })
       
       if (res.ok) {
+        const updatedFolder = await res.json()
         setFolders(prev => prev.map(f => 
-          f.id === id ? { ...f, name: name.trim() } : f
+          f.id === id ? updatedFolder : f
         ))
         setEditingFolderId(null)
         setEditFolderName('')
+        setEditFolderColor(FOLDER_COLORS[0].value)
+        setEditFolderPrivate(false)
+        setEditFolderCurrentPassword('')
+        setEditFolderNewPassword('')
+        setEditFolderWasPrivate(false)
+      } else {
+        const error = await res.json()
+        alert(error.error || 'Failed to update folder')
       }
     } catch (error) {
       logger.error('Failed to update folder', error)
+      alert('Failed to update folder')
     }
-  }, [])
+  }, [editFolderName, editFolderColor, editFolderPrivate, editFolderCurrentPassword, editFolderNewPassword, editFolderWasPrivate])
 
   const handleDeleteFolder = useCallback(async (id: string) => {
     if (!confirm('Delete this folder? Conversations will be moved to unfiled.')) return
@@ -274,7 +320,16 @@ function ConversationList({
     }
   }, [draggingConversationId])
 
-  const toggleFolder = useCallback((folderId: string) => {
+  const toggleFolder = useCallback(async (folderId: string) => {
+    const folder = folders.find(f => f.id === folderId)
+    if (!folder) return
+
+    // Check if folder is private and we don't have the password
+    if (folder.isPrivate && !folderPasswords[folderId]) {
+      setPasswordPrompt({ folderId, name: folder.name })
+      return
+    }
+
     setExpandedFolders(prev => {
       const next = new Set(prev)
       if (next.has(folderId)) {
@@ -284,7 +339,34 @@ function ConversationList({
       }
       return next
     })
-  }, [])
+  }, [folders, folderPasswords])
+
+  // Verify folder password
+  const verifyFolderPassword = useCallback(async () => {
+    if (!passwordPrompt) return
+
+    try {
+      const res = await fetch(`/api/folders/${passwordPrompt.folderId}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passwordInput })
+      })
+
+      const data = await res.json()
+      if (data.valid) {
+        setFolderPasswords(prev => ({ ...prev, [passwordPrompt.folderId]: passwordInput }))
+        setExpandedFolders(prev => new Set(Array.from(prev).concat(passwordPrompt.folderId)))
+        setPasswordPrompt(null)
+        setPasswordInput('')
+        setPasswordError(false)
+      } else {
+        setPasswordError(true)
+      }
+    } catch (error) {
+      logger.error('Failed to verify folder password', error)
+      setPasswordError(true)
+    }
+  }, [passwordPrompt, passwordInput])
 
   // Format date in Austrian German format
   const formatAustrianDate = (date: string | Date) => {
@@ -333,7 +415,7 @@ function ConversationList({
       className={`group relative p-2.5 rounded-lg cursor-pointer transition-all ${
         currentConversationId === conversation.id
           ? 'bg-emerald-900/20 border border-emerald-600/30 shadow-sm'
-          : 'hover:bg-zinc-800/30 border border-transparent hover:border-zinc-700/30'
+          : 'md:hover:bg-zinc-800/30 border border-transparent md:hover:border-zinc-700/30 active:bg-zinc-800/40'
       } ${draggingConversationId === conversation.id ? 'opacity-50' : ''}`}
       onClick={() => handleSelectConversation(conversation.id)}
     >
@@ -367,7 +449,7 @@ function ConversationList({
                 <div className="flex-shrink-0 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
               )}
             </div>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity max-md:!opacity-100">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -400,7 +482,7 @@ function ConversationList({
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
-              {(conversation as any)._count?.messages || 0} Nachrichten
+              {conversation._count?.messages || 0} Nachrichten
             </span>
             <span className="text-zinc-600">•</span>
             <span>{formatAustrianDate(conversation.updatedAt)}</span>
@@ -447,10 +529,12 @@ function ConversationList({
               placeholder="Folder name..."
               className="w-full bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-sm border border-zinc-700 focus:border-emerald-600 focus:outline-none"
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateFolder()
+                if (e.key === 'Enter' && !newFolderPrivate) handleCreateFolder()
                 if (e.key === 'Escape') {
                   setIsCreatingFolder(false)
                   setNewFolderName('')
+                  setNewFolderPrivate(false)
+                  setNewFolderPassword('')
                 }
               }}
               autoFocus
@@ -470,10 +554,49 @@ function ConversationList({
               ))}
             </div>
 
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={newFolderPrivate}
+                  onChange={(e) => setNewFolderPrivate(e.target.checked)}
+                  className="rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-600 focus:ring-offset-0"
+                />
+                <span className="text-xs text-zinc-400">Make folder private</span>
+              </label>
+              
+              {newFolderPrivate && (
+                <>
+                  <div className="bg-amber-950/30 border border-amber-900/30 rounded-lg p-2">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      <div className="text-xs text-amber-200/90 space-y-1">
+                        <p className="font-semibold">🔐 Double Encryption & Security</p>
+                        <p className="text-amber-300/70">This folder will be password-protected with military-grade encryption.</p>
+                        <p className="text-red-400 font-semibold">⚠️ WARNING: Password cannot be recovered if forgotten!</p>
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    type="password"
+                    value={newFolderPassword}
+                    onChange={(e) => setNewFolderPassword(e.target.value)}
+                    placeholder="Enter a strong password..."
+                    className="w-full bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-sm border border-zinc-700 focus:border-emerald-600 focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newFolderPassword) handleCreateFolder()
+                    }}
+                  />
+                </>
+              )}
+            </div>
+
             <div className="flex gap-1">
               <button
                 onClick={handleCreateFolder}
-                disabled={!newFolderName.trim()}
+                disabled={!newFolderName.trim() || (newFolderPrivate && !newFolderPassword)}
                 className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white text-xs rounded transition-colors"
               >
                 Create
@@ -482,6 +605,8 @@ function ConversationList({
                 onClick={() => {
                   setIsCreatingFolder(false)
                   setNewFolderName('')
+                  setNewFolderPrivate(false)
+                  setNewFolderPassword('')
                 }}
                 className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-white text-xs rounded transition-colors"
               >
@@ -495,18 +620,18 @@ function ConversationList({
         {!isCreatingFolder && (
           <div
             onClick={() => setIsCreatingFolder(true)}
-            className="group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer hover:bg-zinc-800/30"
+            className="group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors cursor-pointer md:hover:bg-zinc-800/30 active:bg-zinc-800/40"
           >
             {/* White folder icon */}
-            <svg className="w-4 h-4 text-zinc-400" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-5 h-5 text-zinc-400" fill="currentColor" viewBox="0 0 20 20">
               <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
             </svg>
             
-            <span className="flex-1 text-xs font-medium text-zinc-400 uppercase tracking-wide">
+            <span className="flex-1 text-sm font-medium text-zinc-400 uppercase tracking-wide">
               Neuer Ordner
             </span>
             
-            <svg className="w-3 h-3 text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3 h-3 text-zinc-500 md:opacity-0 md:group-hover:opacity-100 transition-opacity max-md:!opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </div>
@@ -516,7 +641,7 @@ function ConversationList({
         {folders.map((folder) => (
           <div key={folder.id} className="space-y-1.5">
             <div
-              className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors cursor-pointer hover:bg-zinc-800/30 ${
+              className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors cursor-pointer md:hover:bg-zinc-800/30 active:bg-zinc-800/40 ${
                 dragOverFolderId === folder.id ? 'bg-zinc-800/50 ring-2 ring-emerald-600' : ''
               }`}
               onClick={() => toggleFolder(folder.id)}
@@ -526,51 +651,170 @@ function ConversationList({
               onDrop={(e) => handleDrop(e, folder.id)}
             >
               {/* Folder icon with custom color */}
-              <svg 
-                className="w-4 h-4 flex-shrink-0" 
-                fill="currentColor" 
-                viewBox="0 0 20 20"
-                style={{ color: folder.color || '#10b981' }}
-              >
-                <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-              </svg>
+              <div className="relative">
+                <svg 
+                  className="w-5 h-5 flex-shrink-0" 
+                  fill="currentColor" 
+                  viewBox="0 0 20 20"
+                  style={{ color: folder.color || '#10b981' }}
+                >
+                  <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                </svg>
+                {folder.isPrivate && (
+                  <svg className="w-3.5 h-3.5 absolute -bottom-1 -right-1 text-amber-400 drop-shadow-sm" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
               
               {editingFolderId === folder.id ? (
-                <input
-                  type="text"
-                  value={editFolderName}
-                  onChange={(e) => setEditFolderName(e.target.value)}
-                  className="flex-1 bg-zinc-800 text-zinc-100 px-2 py-0.5 rounded text-sm border border-zinc-700 focus:border-emerald-600 focus:outline-none"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleUpdateFolder(folder.id, editFolderName)
-                    if (e.key === 'Escape') {
-                      setEditingFolderId(null)
-                      setEditFolderName('')
-                    }
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  onBlur={() => handleUpdateFolder(folder.id, editFolderName)}
-                  autoFocus
-                />
+                <div className="flex-1 bg-zinc-900/50 rounded-lg p-3 border border-zinc-700/50" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-3">
+                    {/* Folder Name */}
+                    <div>
+                      <label className="text-xs text-zinc-400 font-medium mb-1 block">Folder Name</label>
+                      <input
+                        type="text"
+                        value={editFolderName}
+                        onChange={(e) => setEditFolderName(e.target.value)}
+                        className="w-full bg-zinc-800 text-zinc-100 px-3 py-1.5 rounded text-sm border border-zinc-700 focus:border-emerald-600 focus:outline-none"
+                        placeholder="Enter folder name..."
+                        autoFocus
+                      />
+                    </div>
+                    
+                    {/* Color Selection */}
+                    <div>
+                      <label className="text-xs text-zinc-400 font-medium mb-1.5 block">Folder Color</label>
+                      <div className="flex gap-2">
+                        {FOLDER_COLORS.slice(0, 8).map((color) => (
+                          <button
+                            key={color.value}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditFolderColor(color.value)
+                            }}
+                            className={`w-6 h-6 rounded-full transition-all ${
+                              editFolderColor === color.value 
+                                ? 'scale-125 ring-2 ring-white ring-offset-2 ring-offset-zinc-900' 
+                                : 'hover:scale-110'
+                            }`}
+                            style={{ backgroundColor: color.value }}
+                            title={color.name}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Privacy Settings */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer bg-zinc-800/50 p-2 rounded-lg">
+                        <input
+                          type="checkbox"
+                          checked={editFolderPrivate}
+                          onChange={(e) => setEditFolderPrivate(e.target.checked)}
+                          className="rounded border-zinc-600 bg-zinc-700 text-emerald-600 focus:ring-emerald-600 focus:ring-offset-0"
+                        />
+                        <span className="text-sm text-zinc-300 font-medium">🔒 Make folder private</span>
+                      </label>
+                      
+                      {editFolderPrivate && (
+                        <div className="space-y-2 pl-2">
+                          <div className="bg-amber-950/30 border border-amber-900/30 rounded-lg p-2.5">
+                            <div className="flex items-start gap-2">
+                              <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                            <div className="text-xs space-y-0.5">
+                              <p className="text-amber-200/90 font-semibold">Double Encrypted Security</p>
+                              <p className="text-amber-300/70">Military-grade encryption protects this folder</p>
+                              <p className="text-red-400 font-semibold">⚠️ Password cannot be recovered if forgotten!</p>
+                            </div>
+                          </div>
+                        </div>
+                          
+                          {editFolderWasPrivate && (
+                            <div>
+                              <label className="text-xs text-zinc-400 font-medium mb-1 block">Current Password (required)</label>
+                              <input
+                                type="password"
+                                value={editFolderCurrentPassword}
+                                onChange={(e) => setEditFolderCurrentPassword(e.target.value)}
+                                placeholder="Enter current password..."
+                                className="w-full bg-zinc-800 text-zinc-100 px-3 py-1.5 rounded text-sm border border-zinc-700 focus:border-emerald-600 focus:outline-none"
+                              />
+                            </div>
+                          )}
+                          
+                          <div>
+                            <label className="text-xs text-zinc-400 font-medium mb-1 block">
+                              {editFolderWasPrivate ? 'New Password (leave blank to keep current)' : 'Password'}
+                            </label>
+                            <input
+                              type="password"
+                              value={editFolderNewPassword}
+                              onChange={(e) => setEditFolderNewPassword(e.target.value)}
+                              placeholder={editFolderWasPrivate ? "Enter new password (optional)..." : "Enter password..."}
+                              className="w-full bg-zinc-800 text-zinc-100 px-3 py-1.5 rounded text-sm border border-zinc-700 focus:border-emerald-600 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleUpdateFolder(folder.id)
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Save Changes
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingFolderId(null)
+                          setEditFolderName('')
+                          setEditFolderColor(FOLDER_COLORS[0].value)
+                          setEditFolderPrivate(false)
+                          setEditFolderCurrentPassword('')
+                          setEditFolderNewPassword('')
+                          setEditFolderWasPrivate(false)
+                        }}
+                        className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <span className="flex-1 text-xs font-medium text-zinc-400 uppercase tracking-wide">
+                <span className="flex-1 text-sm font-medium text-zinc-300">
                   {folder.name}
                 </span>
               )}
               
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-zinc-500 font-medium bg-zinc-800/50 px-1.5 py-0.5 rounded">
                 {groupedConversations[folder.id]?.length || 0}
               </span>
               
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+              <div className="md:opacity-0 md:group-hover:opacity-100 transition-opacity flex gap-1 max-md:!opacity-100">
                 <button
                   onClick={(e) => {
                     e.stopPropagation()
                     setEditingFolderId(folder.id)
                     setEditFolderName(folder.name)
+                    setEditFolderColor(folder.color || FOLDER_COLORS[0].value)
+                    setEditFolderPrivate(folder.isPrivate || false)
+                    setEditFolderWasPrivate(folder.isPrivate || false)
+                    setEditFolderCurrentPassword('')
+                    setEditFolderNewPassword('')
                   }}
                   className="p-0.5 hover:bg-zinc-700 rounded text-zinc-400 hover:text-zinc-200"
-                  title="Rename"
+                  title="Edit"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -623,6 +867,84 @@ function ConversationList({
           </div>
         )}
       </div>
+      
+      {/* Password Prompt Modal */}
+      {passwordPrompt && (
+        <>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-in fade-in">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-in zoom-in-95">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-10 h-10 bg-emerald-600/20 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-zinc-100">
+                      Folder Password Required
+                    </h3>
+                    <p className="text-sm text-zinc-400 mt-1">
+                      Enter password to access <span className="text-zinc-200 font-medium">&quot;{passwordPrompt.name}&quot;</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value)
+                      setPasswordError(false)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') verifyFolderPassword()
+                      if (e.key === 'Escape') {
+                        setPasswordPrompt(null)
+                        setPasswordInput('')
+                        setPasswordError(false)
+                      }
+                    }}
+                    placeholder="Enter password..."
+                    className={`w-full bg-zinc-800 text-zinc-100 px-3 py-2 rounded-lg border ${
+                      passwordError ? 'border-red-600' : 'border-zinc-700 focus:border-emerald-600'
+                    } focus:outline-none`}
+                    autoFocus
+                  />
+                  {passwordError && (
+                    <p className="text-xs text-red-400 mt-1">Incorrect password</p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => {
+                      setPasswordPrompt(null)
+                      setPasswordInput('')
+                      setPasswordError(false)
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={verifyFolderPassword}
+                    disabled={!passwordInput}
+                    className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                    </svg>
+                    Unlock
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
       
       {/* Delete Confirmation Modal */}
       {deleteConfirmation.show && (

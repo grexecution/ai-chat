@@ -14,6 +14,21 @@ export const metadata: Metadata = {
   icons: {
     icon: '/icon.svg',
   },
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#18181b' },
+    { media: '(prefers-color-scheme: dark)', color: '#18181b' }
+  ],
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Gibby Chat',
+  },
 }
 
 export default async function RootLayout({
@@ -32,6 +47,10 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className="dark h-full">
+      <head>
+        <meta name="theme-color" content="#18181b" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
       <body className={`${inter.className} h-full overflow-hidden bg-gradient-to-b from-zinc-900 to-zinc-950`} suppressHydrationWarning>
         <SessionProvider session={session}>
           <div className="flex flex-col h-screen overflow-hidden">

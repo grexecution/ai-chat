@@ -25,6 +25,8 @@ export interface Folder {
   icon?: string
   position: number
   isExpanded?: boolean
+  isPrivate?: boolean
+  passwordHash?: string
   createdAt?: string | Date
   updatedAt?: string | Date
   _count?: {
@@ -42,6 +44,9 @@ export interface Conversation {
   createdAt: string | Date
   updatedAt: string | Date
   messages?: Message[]
+  _count?: {
+    messages: number
+  }
 }
 
 export interface ChatCompletionRequest {

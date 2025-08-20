@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
+import bcrypt from 'bcryptjs'
 
 /**
  * GET /api/folders - Get all folders for the current user
@@ -41,10 +42,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { name, color } = await req.json()
+    const { name, color, isPrivate, password } = await req.json()
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 })
+    }
+
+    if (isPrivate && !password) {
+      return NextResponse.json({ error: 'Password is required for private folders' }, { status: 400 })
+    }
+
+    // Hash password if folder is private
+    let passwordHash = null
+    if (isPrivate && password) {
+      passwordHash = await bcrypt.hash(password, 10)
     }
 
     // Get the highest position to add new folder at the end
@@ -61,7 +72,9 @@ export async function POST(req: NextRequest) {
         name: name.trim(),
         color: color || '#10b981', // Default emerald color
         icon: '📁', // Default icon (still in DB but not user-selectable)
-        position: newPosition
+        position: newPosition,
+        isPrivate: isPrivate || false,
+        passwordHash
       }
     })
 

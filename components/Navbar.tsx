@@ -182,16 +182,18 @@ export default function Navbar() {
                   Account Settings
                 </Link>
                 
-                <Link
-                  href="/chat"
-                  onClick={() => setIsDropdownOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+                <button
+                  onClick={() => {
+                    setIsDropdownOpen(false)
+                    window.location.reload()
+                  }}
+                  className="flex items-center gap-3 w-full px-4 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  Back to Chat
-                </Link>
+                  Refresh App
+                </button>
               </div>
 
               {/* Sign Out */}

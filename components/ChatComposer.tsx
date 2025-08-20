@@ -39,7 +39,6 @@ function ChatComposer({
   const [showModels, setShowModels] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [fileError, setFileError] = useState<string | null>(null)
-  const [showFileHelp, setShowFileHelp] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -76,8 +75,7 @@ function ChatComposer({
     
     if (unsupportedFiles.length > 0) {
       const names = unsupportedFiles.map(f => f.name).join(', ')
-      setFileError(`Nicht unterstützte Dateien: ${names}`)
-      setShowFileHelp(true)
+      setFileError(`Nicht unterstützte Dateien: ${names}. Supported: PDF, Images, Documents, Code files`)
       setTimeout(() => setFileError(null), 5000)
       return false
     }
@@ -160,40 +158,6 @@ function ChatComposer({
             </div>
           )}
 
-          {/* Supported File Types Help */}
-          {showFileHelp && (
-            <div className="mb-3 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-sm font-medium text-zinc-200">Unterstützte Dateiformate</h4>
-                <button
-                  type="button"
-                  onClick={() => setShowFileHelp(false)}
-                  className="text-zinc-500 hover:text-zinc-300"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {Object.entries(FILE_TYPE_INFO).map(([ext, info]) => (
-                  <div key={ext} className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${
-                      info.quality === 'excellent' ? 'bg-emerald-500' :
-                      info.quality === 'good' ? 'bg-blue-500' :
-                      'bg-yellow-500'
-                    }`} />
-                    <span className="text-zinc-300 font-medium">.{ext}</span>
-                    <span className="text-zinc-500">- {info.description}</span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-zinc-500 mt-2">
-                🟢 Excellent • 🔵 Gut • 🟡 Basis
-              </p>
-            </div>
-          )}
-
           {/* Attached Files Display */}
           {attachedFiles.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -272,22 +236,10 @@ function ChatComposer({
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploadingFiles}
                       className="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-300 transition-all"
-                      title="Attach files"
+                      title="Attach files (PDF, Images, Text, Code - Max 10MB)"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                      </svg>
-                    </button>
-                    
-                    {/* File Help Button */}
-                    <button
-                      type="button"
-                      onClick={() => setShowFileHelp(!showFileHelp)}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-300 transition-all"
-                      title="Unterstützte Dateiformate"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </button>
                   </>
