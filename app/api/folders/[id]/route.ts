@@ -33,10 +33,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
     }
 
-    // If folder was private and still is private, verify current password
-    if (folder.isPrivate && folder.passwordHash && isPrivate) {
+    // Only verify current password if user is trying to change the password
+    if (folder.isPrivate && folder.passwordHash && password) {
       if (!currentPassword) {
-        return NextResponse.json({ error: 'Current password is required to modify a private folder' }, { status: 400 })
+        return NextResponse.json({ error: 'Current password is required to change the folder password' }, { status: 400 })
       }
       
       const isValidPassword = await bcrypt.compare(currentPassword, folder.passwordHash)

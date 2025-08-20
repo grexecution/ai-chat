@@ -25,9 +25,10 @@ interface ChatThreadProps {
   isSearching?: boolean
   currentCitations?: Citation[]
   conversationId?: string
+  onSendMessage?: (message: string) => void
 }
 
-function ChatThread({ messages, isLoading, streamingMessage, isSearching, currentCitations, conversationId }: ChatThreadProps) {
+function ChatThread({ messages, isLoading, streamingMessage, isSearching, currentCitations, conversationId, onSendMessage }: ChatThreadProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [expandedCitations, setExpandedCitations] = useState<Set<string>>(new Set())
   const [selectedFile, setSelectedFile] = useState<{ messageId: string; filename: string } | null>(null)
@@ -298,12 +299,61 @@ function ChatThread({ messages, isLoading, streamingMessage, isSearching, curren
     <div className="flex flex-col h-full relative">
       {messages.length === 0 && !isLoading && (
         <div className="flex-1 flex items-center justify-center text-center p-6">
-          <div className="max-w-md">
+          <div className="max-w-2xl w-full">
             <div className="text-6xl mb-4">🤖</div>
             <h2 className="text-2xl font-bold text-emerald-400 mb-2">Welcome to Gibby Chat</h2>
-            <p className="text-zinc-400 mb-4">
+            <p className="text-zinc-400 mb-6">
               Your private AI assistant powered by local LLMs. Your conversations stay secure and private.
             </p>
+            
+            {/* Example Prompts */}
+            {onSendMessage && (
+              <div className="mb-6">
+                <p className="text-sm text-zinc-500 mb-3">Try asking:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
+                  <button
+                    onClick={() => onSendMessage("Explain quantum computing in simple terms")}
+                    className="text-left p-3 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all group"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-400">💡</span>
+                      <span className="text-sm text-zinc-300 group-hover:text-zinc-100">Explain quantum computing in simple terms</span>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => onSendMessage("What is the weather in Venice Italy")}
+                    className="text-left p-3 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all group"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-400">🌤️</span>
+                      <span className="text-sm text-zinc-300 group-hover:text-zinc-100">What is the weather in Venice Italy</span>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => onSendMessage("What are the benefits of meditation?")}
+                    className="text-left p-3 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all group"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-400">🧘</span>
+                      <span className="text-sm text-zinc-300 group-hover:text-zinc-100">What are the benefits of meditation?</span>
+                    </div>
+                  </button>
+                  
+                  <button
+                    onClick={() => onSendMessage("Help me plan a productive morning routine")}
+                    className="text-left p-3 bg-zinc-900/50 hover:bg-zinc-800/50 border border-zinc-800 hover:border-zinc-700 rounded-lg transition-all group"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-400">🌅</span>
+                      <span className="text-sm text-zinc-300 group-hover:text-zinc-100">Help me plan a productive morning routine</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <div className="flex items-center justify-center gap-2 text-sm text-zinc-500">
               <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
               Start a conversation below

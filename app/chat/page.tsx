@@ -149,6 +149,7 @@ export default function ChatPage() {
               isSearching={isSearching}
               currentCitations={currentCitations}
               conversationId={currentConversationId}
+              onSendMessage={(message) => handleSendMessage(message, currentModel)}
             />
           </div>
           

@@ -170,9 +170,9 @@ function ConversationList({
   const handleUpdateFolder = useCallback(async (id: string) => {
     if (!editFolderName.trim()) return
 
-    // Validate password requirements
-    if (editFolderWasPrivate && editFolderPrivate && !editFolderCurrentPassword) {
-      alert('Please enter the current password to change folder settings')
+    // Only validate password if user is trying to change password settings
+    if (editFolderWasPrivate && editFolderPrivate && editFolderNewPassword && !editFolderCurrentPassword) {
+      alert('Please enter the current password to change the folder password')
       return
     }
     
@@ -874,7 +874,7 @@ function ConversationList({
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-in fade-in">
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-in zoom-in-95">
               <div className="flex flex-col gap-4">
-                <div className="flex items-start gap-3">
+                <div className="flex flex-col items-center gap-3">
                   <div className="flex-shrink-0 w-10 h-10 bg-emerald-600/20 rounded-full flex items-center justify-center">
                     <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
@@ -953,7 +953,7 @@ function ConversationList({
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-in fade-in">
             {/* Modal */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-in zoom-in-95">
-              <div className="flex flex-col items-start gap-4">
+              <div className="flex flex-col items-center gap-4">
                 {/* Warning Icon */}
                 <div className="flex-shrink-0 w-12 h-12 bg-red-600/20 rounded-full flex items-center justify-center">
                   <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -963,10 +963,10 @@ function ConversationList({
                 
                 {/* Content */}
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-zinc-100 mb-2">
+                  <h3 className="text-lg text-center font-semibold text-zinc-100 mb-2">
                     Chat unwiderruflich löschen?
                   </h3>
-                  <p className="text-sm text-zinc-400 mb-3">
+                  <p className="text-sm text-center text-zinc-400 mb-3">
                     Sie sind dabei, den Chat <span className="text-zinc-200 font-medium">&quot;{deleteConfirmation.conversationTitle}&quot;</span> zu löschen.
                   </p>
                   <div className="bg-red-950/30 border border-red-900/30 rounded-lg p-3 mb-4">
@@ -979,7 +979,7 @@ function ConversationList({
                   </div>
                   
                   {/* Buttons */}
-                  <div className="flex gap-3 justify-end">
+                  <div className="flex gap-3 justify-between">
                     <button
                       onClick={() => setDeleteConfirmation({ show: false })}
                       className="px-4 py-2 text-sm font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"

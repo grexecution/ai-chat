@@ -145,8 +145,8 @@ function ChatComposer({
   const acceptedFileTypes = Object.keys(SUPPORTED_FILE_TYPES).join(',')
 
   return (
-    <div className="border-t border-zinc-800/50 bg-zinc-950">
-      <div className="p-4">
+    <div className="border-t border-zinc-800/50 bg-zinc-950 md:bg-zinc-950 max-md:bg-zinc-900/95 max-md:shadow-2xl">
+      <div className="p-4 md:p-4 max-md:p-5">
         <form onSubmit={handleSubmit} className="mx-auto">
           {/* File Error Message */}
           {fileError && (
@@ -215,7 +215,7 @@ function ChatComposer({
                 onKeyDown={handleKeyDown}
                 disabled={disabled || isUploadingFiles}
                 placeholder={dragActive ? "Drop files here..." : "Ask me anything or drop files..."}
-                className="w-full bg-transparent text-zinc-100 placeholder-zinc-500 p-4 pr-24 resize-none focus:outline-none min-h-[60px] max-h-40"
+                className="w-full bg-transparent text-zinc-100 placeholder-zinc-500 p-4 pr-24 resize-none focus:outline-none min-h-[60px] md:min-h-[60px] max-md:min-h-[80px] max-h-40 md:text-base max-md:text-lg"
                 rows={1}
               />
             
