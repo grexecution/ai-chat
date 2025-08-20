@@ -4,19 +4,23 @@ import { useState, useRef, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import SecurityBadges from './SecurityBadges'
 
 export default function Navbar() {
   const { data: session, status } = useSession()
   const pathname = usePathname()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 })
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const isSuperuser = (session?.user as any)?.role === 'superuser'
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) && 
+          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false)
       }
     }
@@ -24,6 +28,17 @@ export default function Navbar() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Calculate dropdown position when opened
+  useEffect(() => {
+    if (isDropdownOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right
+      })
+    }
+  }, [isDropdownOpen])
 
   // Get user initials for avatar
   const getUserInitials = () => {
@@ -91,8 +106,9 @@ export default function Navbar() {
           </Link>
           
           {/* User Avatar Dropdown */}
-          <div className="relative" ref={dropdownRef}>
+          <div className="relative">
           <button
+            ref={buttonRef}
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-2 p-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
             aria-label="User menu"
@@ -113,9 +129,16 @@ export default function Navbar() {
             </svg>
           </button>
 
-          {/* Dropdown Menu */}
-          {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl overflow-hidden z-50">
+          {/* Dropdown Menu - Rendered as Portal */}
+          {isDropdownOpen && typeof document !== 'undefined' && createPortal(
+            <div 
+              ref={dropdownRef}
+              className="fixed w-64 bg-zinc-900 border border-zinc-800 rounded-lg shadow-2xl overflow-hidden z-[999999]"
+              style={{ 
+                top: `${dropdownPosition.top}px`, 
+                right: `${dropdownPosition.right}px` 
+              }}
+            >
               {/* User Info */}
               <div className="px-4 py-3 border-b border-zinc-800">
                 <div className="flex items-center gap-3">
@@ -186,7 +209,8 @@ export default function Navbar() {
                   Sign Out
                 </button>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
         </div>
